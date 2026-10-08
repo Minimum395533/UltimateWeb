@@ -1,0 +1,225 @@
+[dismiss]
+Welcome to SmashWiki! Log in or create an account and join the community, and don't forget to read this first!
+Notices
+The Skill parameter has been removed from Smasher infoboxes, and in its place are the new "Best historical ranking" and "Best tournament result" parameters. SmashWiki needs help adding these new parameters to Smasher infoboxes, refer to the guidelines here for what should be included in these new parameters.
+When adding results to Smasher pages, include each tournament's entrant number in addition to the player's placement, and use the {{Trn}} template with the matching game specified. Please also fix old results on Smasher pages that do not abide to this standard. Refer to our Smasher article guidelines to see how results tables should be formatted.
+Check out our project page for ongoing projects that SmashWiki needs help with.
+Super Smash Bros. series
+Edge
+From SmashWiki, the Super Smash Bros. wiki
+
+This article is about the stage element referred to as edges. For for other uses of the name "Edge", see Edge (disambiguation).
+
+Melee's Battlefield showing platforms. Edges (grabbable platforms) are denoted with red.
+
+Marth grabbing the ledge of Final Destination in Brawl.
+
+Link stealing a ledge from Mario in Super Smash Bros. for Wii U.
+An edge, also known as a ledge and coded internally as cliff (崖), is any part of a stage from which one can grab or tether (not to be confused with a wall grapple). Edges are often found at the ends of a stage's main platform. The edge therefore becomes an important element in the battle between an edge-guarder and a recovering opponent. Some stages can have many edges or none at all; on most tournament legal stages, there is an edge on both ends of the stage (e.g. Final Destination).
+
+The majority of edges on hard and semisoft platforms can be grabbed. Some edges cannot be grabbed, and so make recovery from that side of the stage significantly more difficult. Examples of ungrabbable edges include the moving platform of Peach's Castle (in Smash 64 only), the lower sides of Summit, and all Stage Builder blocks aside from the standard one (and even then, only if the edge is at least two blocks above a floor). Generally, soft platforms do not have grabbable edges, the main exception being those on Norfair.
+
+In the original Super Smash Bros. and in Super Smash Bros. Melee, a character cannot grab the edge if facing the opposite direction, with some exceptions, such as when using Falcon Dive and Spinning Kong in Melee. In Super Smash Bros. Brawl, Super Smash Bros. 4, and Super Smash Bros. Ultimate, characters can grab an edge behind them, but with a range of 40% less than in front. Characters will automatically grab a nearby edge while in the air unless the player is actively holding down on the control stick or D-pad. Multiple characters cannot hold onto an edge at the same time, with the exception of the Ice Climbers in Brawl and Ultimate, where both climbers belonging to one player can grab the same edge.
+
+When a character grabs an edge, they will briefly become intangible. The amount of intangibility gained depends on the game and if certain conditions are met. In Melee and Brawl, if a character lets go of the ledge, they will keep their intangibility. This is the basis of ledgestalling (see that article for more detailed analysis of how edge-grabbing works in Melee). This ledge intangibility could also be carried over with regular ledge options. If the intangibility of a ledge option ends but the player still has carried over ledge intangibility, they will stay intangible until the ledge intangibility ends. This is mainly relevant with ledge attacks and ledge jumps, allowing players to stay intangible for a longer period of time if they ledge attack/jump as early as possible after grabbing an edge. However, in Smash 64, Smash 4 and Ultimate, the intangibility immediately ends once a player lets go of the ledge by pressing down or back on the control stick, preventing characters from having indefinite ledge intangibility. The intangibility from ledge options also completely overrides ledge intangibility in these games.
+
+The physics of grabbing edges have undergone a massive overhaul in Super Smash Bros. 4. In this game, air time and damage of a character affect how much intangibility is earned by grabbing the ledge; a healthy character with a high amount of air time earns more intangibility. Damage no longer affects a character's recovery animations, so they always use their fast ones. A character can also be stopped from grabbing a ledge for 55 frames if they are hit, forcing most characters to predictably delay their recovery in order to sweetspot the ledge. Finally and arguably most importantly, trying to grab an edge that another character is already grabbing will gently remove them from the edge and then grab it, removing edge-hogging, and grabbing an edge a second time without touching the ground or being hit will not grant intangibility, negating planking. Grabbing and stealing edge while someone hangs from it as well is commonly known as ledge trumping.
+
+In Ultimate, in the same vein as Ike's Aether in previous games, characters can only grab an edge up to six times without either touching the ground or sustaining hitstun; subsequent attempts will still show the visual effect for an edge grab if the character comes in contact, but without it actually happening. This further reduces the effectiveness of planking strategies.
+
+
+Contents
+1	Climbing
+1.1	Fast versus slow edge actions
+2	Intangibility duration
+2.1	Grounded actionable ledge intangibility
+3	Hang time
+4	Ledge regrab penalties
+5	Ledgetrapping
+5.1	Notable examples of effective ledgetrapping
+6	2 frame punish
+6.1	Terminology
+7	Edge sweet spot
+8	Super Smash Bros. for Wii U digital manual description
+9	References
+10	External links
+11	See also
+Climbing
+
+A chart showing different ways for a character to edge recover in Brawl.
+Main article: Edge recovery
+When hanging onto an edge, the player has five possible actions:
+
+Climbing
+Attacking
+Rolling
+Jumping (except in Smash 64)
+Dropping
+Fast versus slow edge actions
+Prior to Super Smash Bros. 4, when a character's damage is lower than 100%, the character is considered "fresh", and is able to climb back onto the stage from the edge rather quickly. However, at percentages of 100% and above, the character can be considered "tired", and climbing becomes a harder task. As a result, all edge actions aside from letting go have two possible animations: one with the character performing the action in a fluent and fast manner, and another with the character doing so in a clumsy and slow manner. The fast and slow animations are often noticeably different in execution, such as a quick flip kick versus a slow trip kick, or a quick roll versus a slow crawl.
+
+The slow actions were removed in Smash 4.
+
+Intangibility duration
+The amount of intangibility gained upon grabbing an edge differs between games, but is generally a fixed value. This changes starting in Smash 4, where both air time and percentage have an effect.
+
+Value	Notes
+SSB	60 frames	(plus the duration of the edge-grabbing animation, which is 3 frames, excluding Yoshi, Mario, and Luigi, for which it's 7 frames)
+SSBM	30 frames	(plus the duration of the edge-grabbing animation, which is 7 frames, excluding Link, for which it's 3 frames)
+SSBB	23 frames	(plus the duration of the edge-grabbing animation, which is 23 frames, excluding Pikachu, for which it's 11 frames)
+SSB4
+SSBU	(60 * (a / 300)) + (44 - (p / 120 * 44)) frames	(plus the duration of the edge-grabbing animation, which is 19 frames)
+(a = airtime in frames with max 300, p = percentage with max 120)
+(minimum 23 frames, maximum 123 frames)
+The following behaviors arise from the system in Smash 4 and Ultimate:
+
+Players with low damage and low airtime are intangible for 63 frames (~1 second).
+Players with high damage and high airtime can be intangible for up to 79 frames (~1.333 seconds). As a result, fresh players that grab the edge are about even with highly-damaged players trying to recover.
+Players with high damage and low airtime are only intangible for 23 frames (0.4 seconds), so it does no good to grab the edge multiple times when recovering.
+Players with low damage and high airtime can be intangible for up to 123 frames (~2 seconds), much more than any other game. However, this is difficult to achieve, as the required airtime is 5 seconds.
+Grounded actionable ledge intangibility
+It is possible to get up from an edge and become actionable before the intangibility gained from grabbing said edge runs out. This window of time is known as grounded actionable ledge intangibility (often shortened to GALINT). A common way to gain GALINT is the ledge dash in Melee, which involves dropping from an edge, then jumping and air dodging at the right time depending on the character to bypass the getup animation and be actionable sooner than anticipated. The window to perform this technique and the amount of possible GALINT varies by character, as some are slower in the air than others and thus have less GALINT.
+
+Advanced techniques exist to achieve more GALINT, either by becoming actionable sooner or gaining more intangibility frames. Examples include performing a no-impact land to bypass landing lag as well as Peach in Melee grabbing an edge with Peach Parasol before the parasol opens, which changes her collision box in such a way that a precise ledge dash will grant Peach up to 9 frames of GALINT instead of her usual 0.
+
+Hang time
+The amount of damage a character has affects how long they can hang on an edge before automatically dropping off and beginning to tumble.
+
+SSB	SSBM	SSBB	SSB4 and SSBU
+Under 100%	18 seconds	11 seconds	6 seconds	6.5 seconds
+100% or more	8 seconds	8 seconds	5 seconds
+These durations can only be altered in SSB4 with Lingering Edge and Hasty Edge equipment; nothing else has any effect, such as character properties or item-provided statuses.
+
+Ledge regrab penalties
+Starting in Ultimate, in addition to fighters no longer receiving ledge intangibility when regrabbing the ledge without landing or sustaining hitstun, 3 other penalties are applied to fighters when regrabbing the ledge as well. The first penalty is that a player can only grab the ledge a maximum of 6 times before having to land on stage. Attempts to regrab the ledge after this limit will show the particle effect, but the player will not snap to the ledge at all, providing a nearly guaranteed self-destruct. However, if the player is put into hitstun, the 6 grab limit is reset, allowing 6 more regrabs. Interestingly, regrabbing the edge with tether recoveries will still grant intangibility on ledge hanging while decreasing the intangibility on getups.[1] Unlike other special moves, Extreme Speed can grab the ledge after Lucario has grabbed the edge 6 times. However, this will not restore normal edge grabbing outside of Extreme Speed.[2]
+
+The second penalty is that the intangibility granted by all ledge getup options (standard, jump, attack and roll) is reduced for each ledge regrab, applying a multiplier of 0.8× after the first regrab, 0.5× after the second, and being disabled entirely from the third regrab onwards. This penalty resets when the character becomes grounded again.
+
+The third penalty regards how quickly the fighter can act after grabbing the ledge; before a fighter can use a getup option or drop off the ledge, their ledge grabbing animation must finish first. For all fighters, this lasts 19 frames by default, preventing action until frame 20. However, regrabbing the ledge multiple times reduces the speed of the animation, extending its duration and therefore how long the opponent is unable to act after grabbing the ledge. The penalties are as follows:
+
+Consecutive ledge grabs	Animation speed
+1	1×
+2	1×
+3	0.9375×
+4	0.875×
+5	0.8125×
+6	0.75×
+Ledgetrapping
+Ledgetrapping is the act of limiting only six options to leave the ledge and granting coverage of them: regular getup, getup attack, ledgeroll, ledge jump, drop down ledge attack, or staying on the ledge. This is an effective strategy for players who are trying to read their option by using a move that covers most of their choices. A simple way of ledgetrapping for all characters is shielding at the ledge as it covers four out of the six ledge options, two of which must be reacted upon (regular getup, getup attack, ledge roll, and jump). If the ledgetrapper shielding gets one of the options, they can grab the opponent and send them back past the ledge for them to try again.
+
+Notable examples of effective ledgetrapping
+An icon for denoting incomplete things.	This article or section is incomplete. You can help SmashWiki by expanding or finishing it.
+The editor who added this tag elaborates: Only mentions SSBU
+Mario: Up smash covers ledge jump, getup attack, and roll. His neutral air's lingering hitbox also covers ledge jump and getup attack.
+Link: Link's neutral air covers a wide hitbox around him and his Remote Bombs can be thrown up to cover every option if timed right.
+Samus and Dark Samus: Bomb at ledge is very useful to cover a lot of options. Charge shot can be used to react to ledge jump if the ledgetrapper is quick.
+Yoshi: Neutral air covers a wide hitbox around him and Egg Throw also can be angled to cover different angles in which the opponent travels.
+Fox: His neutral air covers a large hitbox and if the sourspot connects at higher percents, it can confirm into an up smash.
+Pikachu: Thunder Jolt covers roll, regular getup, getup attack, and staying on the ledge because it travels under the ledge. He can also do back airs out of shield to force a reaction and can shield poke the regular getup.
+Ness: PK Fire is effective at catching some reckless options, including jump, regular getup, and getup attack. Ness also can use yo-yo at the ledge to cover jump, roll, and staying on the ledge, especially.
+Captain Falcon: Holding shield a few steps from ledge while facing away from it can cover any option. Reacting to getup attack or jump from ledge with a parry or using up special out of shield, reacting to jump with a Full Hop back air or up special out of shield, reacting to normal getup with up special out of shield, and reacting to ledge roll with grab.
+Zelda: Phantom Slash at the ledge covers all options and if the opponent is shielding, Zelda can get a free grab.
+Dr. Mario: Megavitamins have a tricky trajectory and bounce and if it covers an option, he can confirm into any aerial. Dr. Tornado is also effective at ledge and it covers jump if mashed, regular getup, getup attack if the heavy armor is initiated on startup, and staying on the ledge as an edgeguarding tool. Just like Mario, up smash covers the same options.
+Marth and Lucina: Neutral air and forward air's hitbox covers all getup options with the large arc.
+Ganondorf: Neutral air covers regular getup, getup attack, and jump. Forward and up smash are notoriously powerful for calling out opponents' option at the ledge.
+Mewtwo: Shadow Ball covers regular getup, getup attack, jump, and roll. However a fully charged Shadow Ball can hit opponents who are hanging on the edge for too long.
+Roy and Chrom: Their jab can hit below the ledge and also covers all the options. Chrom, in particular, can up special out of shield to react to opponent's options. Roy, on the other hand, can Double-Edge Dance at the ledge to call out poor options.
+Mr. Game & Watch: Chef at the ledge is very effective as the distance the food travels can be controlled. Up smash and down smash can read rolls and jumps for the invincible latter.
+Wario: Chomp at ledge is very useful and is also a command grab as it covers regular getup and jump.
+Snake: Snake's Grenades, up smash, and C4 at ledge provide every coverage and it only recovers the opponent's timing. However, it is a long setup.
+Ike: Aether and Eruption cover large areas, and the latter can hit the ledge.
+Lucas: PK Freeze and down smash covers a large area and it also hits the ledge.
+King Dedede: Gordo's bounce patterns at the ledge create a tricky option for opponents to leave it and Dedede can also charge Jet Hammer to cover extra options.
+R.O.B.: Gyro at ledge can create setups, neutral air has a wide hitbox that covers all getup options, and Arm Rotor is very useful as a ledge guarding tool.
+Wolf: Neutral air covers a wide hitbox and down smash covers roll, regular getup, and getup attack.
+Palutena: Down tilt covers hanging on the ledge, Explosive Flame is effective at getup attack and jump.
+Robin: Arcfire at the ledge can combo into any aerials because it has good coverage.
+Shulk: Neutral air and forward air at the ledge is infamous for its massive range to cover all options.
+Cloud: Neutral air and forward air is good at getup options and up special out of shield is good at reacting.
+Inkling: They can throw a Splat Bomb to cover regular getup, getup attack, and jump.
+Simon and Richter: Holy Water at the ledge covers all options except staying on ledge and it can confirm into a forward smash.
+Piranha Plant: Ptooie's arc covers all options if aimed right with addition of Long-Stem Strike and Poison Breath.
+Joker: Both versions of back air and Arsene at ledge is effective to call out opponents options. Eiha and Eigaon create tricky arcs for opponents to react to.
+Hero: Zapple and Kazap are effective at covering all options and Kazap has super armor so it invalidates getup attack but not staying on ledge.
+Banjo & Kazooie: Rear Egg's slow movement can be tricky to exploit due to its angle and Egg Firing is effective at denying different getups.
+Byleth: Down smash and down tilt cover all options except jumping. Up smash, neutral aerial, and Sword of the Creator can be used out of shield to react to the opponent's options.
+Sephiroth: Gigaflare has a large hitbox that covers most, if not all options
+2 frame punish
+A two frame punish is a mechanic introduced in Smash 4 that allows a potential edge guarder to attack an opponent attempting to recover without even leaving the stage or hardly coming off. When a character grabs the ledge, there are exactly two frames (or 1/30th of a second) before the intangibility activates. This was most likely added to compensate for the removal of edge-hogging, as it still allows players to be punished for going for a ledge grab, even though it is more difficult and less consistent than edge-hogging. The two frames of punish time don't appear if the character recovering grabs the ledge not by coming up, but by going past the ledge and grabbing it on the way back down, or just jumping and not using their up special, though both can lead to punishment regardless. If the recovering character uses a teleport recovery (like Sheik's Vanish) starting from above the ledge, the two vulnerable frames don't apply and there will be no room for punishment.
+
+Tilts and Z-Dropped items are generally the best tactics to make use of the frames. Any attack that goes below the ledge will work, but they're the least punishable. The downward half of Ike's Aether and Mii Brawler's Soaring Axe Kick can act as an extremely powerful meteor smash or sacrificial KO if landed during this period.
+
+Terminology
+A handful of terms are used to describe how easily or consistently moves can two-frame and pressure players holding a ledge.
+
+Reaching
+Any move that reaches the ledge hits at ground level, able to hit most (but not all) ledge-hanging fighters as a result. In SSB4 and SSBU, a good way to test this is to stand on a row of breakable blocks on the Super Mario Maker stage. Moves that at least reach the ledge, such as Meta Knight's forward smash and Mii Swordfighter's down smash will be able to break the blocks.
+
+Clipping
+Any move that clips the ledge hits below ground level by enough to hit any ledge-hanging fighter in the cast. In SSBU, a good way to test this is to grab the edge as Ganondorf, wait for his intangibility to run out, and then test the move in question with another fighter. Ganondorf has the lowest ledge hurtbox in SSBU, so moves that hit him from said position will work against everyone else. Moves such as Bowser's forward tilt, or Kirby's down tilt, clip the ledge.
+
+Piercing
+Any move that pierces the ledge goes all the way through it to the other side (at least 8 units below ground level). While these can of course two-frame, doing so is often unnecessary, as they reach low enough to hit many fighters attempting a recovery before they even have the chance to grab the edge. Moves such as R.O.B.'s down aerial, or Pyra's down aerial, pierce the ledge.
+
+Edge sweet spot
+The edge sweet spot is the point farthest away from the edge at which a character can still grab the ledge. This is normally in reference to a recovery move such as an up special move, but is also active when a fighter is double jumping, tether recovering, or falling downwards and not using an aerial. This distance varies for each character and each type of recovery move, with some recovery moves having large edge sweet spots, while other moves cannot sweet spot at all. In addition, some fighters have notoriously large edge sweet spot hitboxes, particularly in Smash 4, which has led to many players jokingly referring to the feature as "magnet hands".
+
+All characters have two hitboxes, one in front and one behind them, usually towards their head area, which when overlapping with the ledge will result in the character grabbing the ledge. Some special moves only enable the front edge sweet spot hitbox to be active, while some do not allow for either part of, or the entire duration of the special move. Notable recovery moves that cannot edge-sweetspot are Captain Falcon and Ganondorf's up specials in Melee (though their up specials can grab ledges that are behind them), along with Little Mac's Rising Uppercut, Cloud's Climhazzard (if he is not under Limit Break status), and Terry’s Rising Tackle.
+
+It is generally safer, if going for the ledge, to aim for recovery moves to narrowly grab the ledge without peeking above it, in order to evade an edgeguard from the opponent, though overextending for this can lead to a self-destruct. It can also be strategic to aim for the ledge in a sweet-spotting manner even when the character can very safely make it back to the stage. The edges on Battlefield in Melee are quite infamous for being difficult to grab on to.
+
+Super Smash Bros. for Wii U digital manual description
+"If you get close enough to an edge, your character will grab on to it. Pressing left or right, jumping, or pressing the attack or shield button will let you climb up off the edge in a variety of ways."
+
+"Some fighters have special moves or tools to grab on to edges."
+References
+ https://www.twitter.com/Tilted_as_fuck/status/1222252893249601536
+ https://youtu.be/qELOV3Yh7Og?t=721
+External links
+"Brawl ledges are silly" video by kupo150 on YouTube
+See also
+Platform
+Recovery
+
+Privacy Icon Do Not Sell My Personal Information
+Categories: Stage partsGame physics
+Meta category: Articles with incomplete sections
+Navigation menuPage actions
+ArticleDiscussionEdit this pageHistory
+Personal tools
+ Not logged inTalkContributionsCreate accountLog in
+Navigation
+Main page
+Smash Bros. Ultimate
+Smash Bros. 4
+Smash Bros. Brawl
+Smash Bros. Melee
+Smash Bros. (64)
+Fighters
+Stages
+Modes
+Items
+Random page
+Search
+Search SmashWiki
+ 
+Participate
+Forum
+Community portal
+Recent changes
+Help
+Glossary
+Admin noticeboard
+Discord server
+Twitter account
+Tools
+Special pages
+Printable version
+Permanent link
+Page information
+Attribution-ShareAlike 4.0 International
+Powered by MediaWiki
+This page was last edited on September 2, 2026, at 19:15.Content is available under Attribution-ShareAlike 4.0 International unless otherwise noted. Privacy policyAbout SmashWikiDisclaimersMobile view
+
+
+
