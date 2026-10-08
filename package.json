@@ -7,11 +7,16 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "node --experimental-strip-types --test tests/physics/units.test.mjs tests/physics/trainingMovement.test.mjs",
+    "test": "node --experimental-strip-types --test tests/physics/units.test.mjs tests/physics/trainingMovement.test.mjs tests/dev/frameDataModel.test.mjs",
+    "test:frame-data-integration": "FRAME_DATA_INTEGRATION_TEST=1 node --experimental-strip-types --test tests/dev/frameDataApi.integration.test.mjs",
+    "test:frame-data-production": "npm run build && node --test tests/dev/frameDataProductionAccess.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@types/pg": "^8.23.1",
     "@types/react-router-dom": "^5.3.3",
+    "gifuct-js": "^2.1.2",
+    "pg": "^8.23.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.4"
