@@ -1,0 +1,176 @@
+
+Super Smash Bros. series
+Hitbox
+From SmashWiki, the Super Smash Bros. wiki
+
+For the website, see hitbox.tv.
+
+An example of offensive and damageable collision bubbles in Melee, as demonstrated with Mewtwo's up aerial. Yellow bubbles are hurtboxes, and red bubbles are hitboxes.
+A hitbox (攻撃判定, Attack judgement) or collision bubble, also known as a hitbubble and officially called attack collision[1], is the main structure for how attacks are executed in most fighting games. An attack's hitbox is the part of that attack that can deal damage when touched. A character's hurtbox (喰らい判定, Reception judgement), also called a hurtbubble, is the part of a character which, when touched by a hitbox, causes the character to take damage. In other words, when an attack's hitbox overlaps with a hurtbox, the attack is considered a hit. An attack may have more than one hitbox associated with them, and while hitboxes are invisible, they usually, though not always, have the same shape as the attack's animation.
+
+
+Contents
+1	Overview
+1.1	Hitboxes in three dimensions
+2	Hitbox types
+3	Hitbox properties
+3.1	Normal properties
+3.2	Special properties
+3.3	Hitbox related flags
+4	Trapbox
+5	Trivia
+6	Gallery
+7	References
+Overview
+
+Super Smash Bros. Ultimate's Training mode displaying hurtboxes for invulnerability: Mario is invincible due to a Super Star, while Ridley's wing, head, and arm are intangible due to his up tilt.
+Every action that is meant to interact with something else possesses a hitbox of some kind. The parts of an animation where a hitbox is present are called active frames, which generally correlate to the part of the animation that looks like it is supposed to cause an interaction. Attacks with a single strike tend to have very few active frames, while attacks that linger like Bowser's Fire Breath has lots of active frames.
+
+The two most common forms of hitbox shapes in video games are cuboids and spheres. Neither is obviously better than the other - cuboids can more easily form long or thin attacks or targets, while spheres are easier to calculate collision detection for. The original Super Smash Bros. primarily uses cuboids whereas Super Smash Bros. Melee, Super Smash Bros. Brawl, Super Smash Bros. 4, and Super Smash Bros. Ultimate use spheres and sphere-like structures known as capsules (cylinders with spheres on the ends).
+
+In Smash 64, hacks can enable hitbox visibility (with a few limitations), such as in this image. In Melee, hitboxes can be seen with the debug menu if set to DEVELOP, though accessing it requires a cheating device. There is no easy way to display hitboxes in-game in later games, though a common technique in Brawl is to use hacks to place Super Scope shot visuals where the hitboxes are (which is significantly more involved a process and generally fails for any projectile or item). Ultimate's Training mode natively includes an option to display characters' hurtboxes when invincible or intangible, though only their portions that overlay with the character's model are shown, rather than their true shapes.
+
+Should multiple hitboxes of a single move connect with the opponent, only one of them will count. The order of precedence is known as the "hitbox stack" - hitboxes higher in the stack will override ones lower should they both hit at the same time. Mechanically, this is denoted by giving each hitbox an ID number, and lower numbers indicate higher precedence (higher stack position). For example, Marth's down aerial in Melee features its tipper hitbox on top of the stack, so hitting with both a tipper and non-tipper hitbox will result in the tipper counting, even if the majority of the opponent was hit by the other hitboxes. By contrast, the move in Brawl has the tipper on the bottom, so the tipper can only hit if none of the other hitboxes do. As a result, even though the sizes and positions of the hitboxes did not change much between games, the tipper is more difficult to hit in Brawl than in Melee.
+
+
+
+Link uses his forward smash on a wall in his Smash 64 Break the Targets level and successfully breaks a target due to his sword's disjoint, he then uses his non-disjointed neutral air on a target above it and fails to break it.
+Hitboxes that are separated from a character's hurtboxes are often called disjointed (武器判定, Weapon judgement), which is usually an advantage, as they can connect from a farther distance, while keeping the attacker safer from retaliation and reducing the likelihood of trading blows. Examples of disjointed hitboxes include most weapon-based attacks, and more infamously the up tilts of Kirby in Smash 64 and Snake in Brawl, as well as some of Joker's moves when using Arsène.
+
+An interesting property of hitboxes in the Super Smash Bros. series is that under most conditions, they occupy not only the space where they currently are, but also the space where they were one frame ago, as well as all the space in between (in a straight line, regardless of what the animation might look like during intervening subframes). This characteristic, known as interpolation, helps to prevent situations where a fast projectile may end up passing through a character in less than a frame without hitting them. On the other hand, hurtboxes do not interpolate in this way, so a fast-moving object (such as Fox during his Illusion) may be able to move through a slow or stationary hitbox without being damaged. In addition, certain hitboxes from Brawl onward use a stretch effect to create a very long hitbox, for example in Zero Laser and Aura Storm, instead of interpolating. It is unclear how this hitbox-stretching mechanism operates when time is slowed via Training mode or other effects, as the games render subframes, whereas Smash 64 and Melee simply reduce the overall framerate.
+
+Hitboxes in three dimensions
+
+While the regular camera suggests Mario should have been hit already, a side view shows otherwise.
+It is a common misconception that, like in most other fighting games, hitboxes and hurtboxes only operate in two dimensions. In actuality, they interact in all three dimensions equally, even though the majority of gameplay elements are restricted to two-dimensional movement. As a result, Super Smash Bros. is more accurately described as a 2.5D game.
+
+Animations for a game like Smash are typically created so that hitboxes always activate on a median line, meaning collision occurs in the same relative spot without many unexpected interactions. This also facilitates the need for designers to carefully consider when hitboxes will activate, as a hitbox being active at a very early or very late part of an attack animation can lead to more unexpected interactions.[1]
+
+Notable examples of unexpected behavior due to the 3D nature of hitboxes include:
+
+Animations where characters lean sideways can result in attacks missing them. King Dedede's spot dodge in Brawl is a notorious example, allowing him to dodge attacks with narrow hitboxes even after his intangibility ends.[2]
+Attacks that swing in a horizontal arc can hit characters of different widths at different times. For example, Peach's neutral aerial in Smash 4 usually hits Zero Suit Samus a frame later than most other characters. Similarly, Yoshi's dash grab in Melee is so off to the side of the playing plane that it often misses skinny characters, such as Zelda or Marth, which is demonstrated in this clip where aMSa's Yoshi misses a grab at point blank range against PewPewU's Marth.
+When playing on a two-dimensional stage such as Flat Zone, many of these quirks disappear, due to characters being almost completely flattened along the camera's axis. However, some new quirks can arise: if hitboxes are produced when an arcing attack is normally not yet in the playable plane, the flattening effect results in them being able to hit earlier than expected. For example, Charizard's forward tilt in Smash 4 can land its flame hitbox sooner than usual. It is also important to note that only the characters are flattened; their hitboxes and hurtboxes continue to operate as three-dimensional objects in a three-dimensional world, so manoeuvres such as using the Dragoon are not affected.
+
+Players tend to refer to any unexpected behavior of this nature as fault of the "z-axis", as z traditionally refers to the third dimension in a three-dimensional environment. This tends to result in confusion when character moveset data is decoded, as while the camera's axis is indeed along the z-axis of stages, for characters and most other gameplay objects, the z-axis is the one that points forwards.
+
+Hitbox types
+
+The different types of hitboxes and hurtboxes visualized in Melee.
+Hitbox Type	Debug mode Colour	Explanation
+Offensive	Red	The standard type of attacking hitbox. From Brawl onward, there are various types of offensive hitboxes, some of which have unique properties (like the ability to ignore shields).
+Damageable	Yellow	The standard type of damageable area, also known as hurtboxes. Characters have a variety of these attached to their bodies, while damageable stage areas (such as the wedge of ice on the Summit) and non-playable entities (like enemies and bosses) use them as well.
+Invincible	Green	Invincible targets can be hit by attacks, but do not take any damage or knockback from them. For example, this occurs for characters that have just stepped off a revival platform, or have acquired a Super Star.
+Intangible	Blue	Intangible targets cannot be hit by attacks. This occurs during actions such as dodges, techs, and ledge getups. Various characters' attacks provide certain parts of their body with intangibility, such as Mario's head during his up smash.
+Grab	Magenta	Grab hitboxes ignore any special or defensive hitboxes.
+Shield	Cyan	Defensive hitboxes that shield attacks, unless they are grabs or unblockable. Also used by moves such as most counterattacks.
+Reflective	Aqua	Defensive hitboxes that reflect attacks.
+Absorbing	Cyan-blue	Defensive hitboxes that absorb attacks.
+Inert	Grey	Inert hitboxes are used for collision detection when a regular hitbox is unsuitable, such as the dash of Raptor Boost and Gerudo Dragon.
+Hitbox properties
+Normal properties
+Property	Introduced in	Description
+ID	Smash 64	The priority of the hitbox compared to the move's other hitboxes. If multiple hitboxes of an attack connect within the same frame, the hitbox with the lowest ID value registers the hit. This property is imperative to determine the precision and spacing for landing sweet spots; usually, hitboxes closer to the attacker have a lower ID (higher priority), regardless of whether they are sourspots or sweetspots.
+Part	Smash 64	Determines how many hitboxes can hit in one attack. If a hitbox has a part value of 1, for example, it can connect after landing a hitbox with a part value of 0. The vast majority of attacks use a part of 0 for all their hitboxes; instead, this property is reserved for certain multi-hit moves such as Marth's up smash in Brawl and Smash 4, to allow both the launcher (part 0) and sword hitboxes (part 1) to come out on the same frame and be considered multiple hits. However, a few oddities arise if hitboxes of different parts hit in the same frame:
+If the hitbox with a lower part deals much higher knockback, even if fixed, it overrides the higher part's knockback, resulting in unusual behavior for a multi-hit move. The aforementioned up smash is particularly prone to this situation at low percents.
+If the hitbox with a lower part is shielded, but the higher part shield stabs, the entire move is shielded, but the higher part still produces its graphical and sound effects.
+Bone	Smash 64	The bone of a character model the hitbox is connected to, which can be a numerical or text value. A bone of 0 or "top" only follows the character's position, while other values correspond to different bones of a character (such as an arm, leg, or in the case of swordfighters, a portion of the sword), and follow their movement even if the character themselves do not change position. Several attacks, particularly arcing swings, employ this property so their hitboxes can cover a wide area around the character without having to manually change their placement every frame; in later games, the latter measure is only done in specific cases to avoid blindspots.
+Damage	Smash 64	The base damage dealt by the hitbox. In the first three games, the initial damage is always an integer, but after Smash 64, it rarely ends up as one once modified by factors like stale-move negation. From Smash 4 onward, damage can be any number with up to six decimal values (per the single-precision floating-point format).
+Angle	Smash 64	The hitbox's launch trajectory, coded in degrees. Usually a number from 0 to 360, and can rarely be negative numbers such as -90. Depending on the game, values from 361 to 368 are reserved for special angles, such as the Sakurai angle (the default angle for horizontal-launching moves) or autolink angle.
+Knockback scaling	Smash 64	Also known as knockback growth. A factor in the knockback formula, generally determining the rate at which the hitbox's knockback rises as the target's damage increases, with the default being 100. For example, a knockback scaling of 110 means knockback increases at a 1.1× rate compared to other hitboxes with the same damage and base knockback.
+Fixed knockback value	Smash 64	If not 0, causes the hitbox to deal a specific amount of knockback regardless of its damage or the target's, though it can still be modified by factors such as launch rate (prior to Smash 4) or weight.
+Base knockback	Smash 64	A factor in the knockback formula, generally determining the minimum knockback the hitbox can apply, though not being the only factor (the hitbox's damage and knockback scaling are relevant as well).
+Size	Smash 64	The hitbox's radius in units of distance.
+X position	Smash 64	The hitbox's horizontal displacement (in units of distance) relative to the bone it is attached to. In Smash 4 and Ultimate, for a bone of 0 or "top", this refers to the Z axis.
+Y position	Smash 64	The hitbox's vertical displacement (in units of distance) relative to the bone it is attached to.
+Z position	Smash 64	The hitbox's displacement in the foreground/background (in units of distance) relative to the bone it is attached to. In Smash 4 and Ultimate, for a bone of 0 or "top", this refers to the X axis.
+Effect	Smash 64	The hitbox's effect on hit, such as normal, slash, flame, or electric, among others. Can also be none.
+Groundness/Airness	Smash 64	Determines whether the hitbox can strike grounded opponents, aerial opponents, or both (or neither, but this is very rarely used). Attacks intended to have different behavior on grounded and aerial opponents (such as Samus' up tilt from Melee onward) generally use two hitboxes with the same placement, but differences in other properties as desired. In Ultimate, hitboxes can also be set to not connect against prone opponents, which is generally used for burying hitboxes.
+Shield damage	Smash 64	The hitbox's additional damage dealt to shields; usually 0, which means the hitbox deals regular damage to shields. Can also be a negative value to have hitboxes deal less damage to shields, though this is only used in Smash 64, Melee and Ultimate.
+Clang	Smash 64	Determines whether the hitbox can cancel out other hitboxes through priority rules. In Smash 64, if a hitbox that cannot clang interacts with another hitbox, the move will clash, but its animation will continue, rather than going through the rebound animation. In later games, hitboxes that cannot clang simply cannot interact with other hitboxes.
+Sound effect	Smash 64	The hitbox's sound effect on impact (punch, kick, slash, burn, or shock, among others), including sounds unique to certain characters (such as Cloud's slash sounds). Can also be none.
+Sound level	Smash 64	The strength of the sound effect the hitbox produces on impact (small, medium, or large; huge can be applied for certain types).
+Rebound	Melee	If set, prevents a grounded move from being interrupted if the hitbox clangs with another, disregarding priority rules. This essentially has the same effect as the clang property did in Smash 64, and is irrelevant if a hitbox cannot clang. In Ultimate, this is merged with the clang property, which is set as "THRU" (rather than "ON" or "OFF") to determine that a hitbox can clang but not rebound.
+In Brawl only, while this property is still present, it appears to be disabled altogether.
+Directness	Melee	Determines whether the hitbox is indirect or not, which is used for enemy/sticker interactions in Brawl, and to determine a move's shieldstun from Smash 4 onward, among other effects. In Melee, the only known effect is that if an attack breaks a Metal Box, it needs to be direct to give the attacker its effect. Not to be confused with a projectile.
+Trip chance	Brawl	The hitbox's bonus trip chance; for example, a value of 0.4 yields a 40% bonus trip chance. Can also be negative to disable the base trip chance, which is used for certain multi-hit moves such as Roy's up smash in Ultimate.
+Hitlag multiplier	Brawl	Set to 1 by default. Modifies the duration of hitlag applied on impact to both the attacker (except for projectiles) and victim.
+SDI multiplier	Brawl	Set to 1 by default. Modifies the distance of smash directional influence for opponents struck by the hitbox.
+Type	Brawl	Determines what kind of stickers (spirits in Ultimate) can power up the hitbox, such as arm, leg, body, or weapon, among others.
+Special properties
+Prior to Ultimate some hitboxes are listed as "special hitboxes" which have additional properties. In Ultimate, these properties are included for every hitbox.
+
+Property	Introduced in	Description
+Reflectiveness	Smash 64	Determines whether the hitbox can be reflected. Usually a projectile.
+Absorptiveness	Smash 64	Determines whether the hitbox can be absorbed. Usually a projectile, but can rarely be used for physical attacks, such as Zero Suit Samus' down smash.
+Blockability	Melee	Determines whether the hitbox can be shielded. In Ultimate, this property is merged with shield damage, which is listed as "no" if a hitbox is unblockable.
+Flinchless	Melee	If set, prevents the hitbox from inflicting hitstun or hitlag; any knockback coded for the hitbox instead pushes or pulls opponents, which is commonly referred to as a windbox.
+Hit bits	Melee	Determines what a hitbox is capable of interacting with. This includes damageable stage objects (floors, ceilings, or other), or multiple opponents, as well as if it can connect against enemies from the Subspace Emissary in Brawl. Most attacks can hit all specified objects, but certain others, such as Mario's Fireballs, are set to ignore damageable floors so they cannot be stopped by Skyworld's breakable platforms, for example.
+From Smash 4 onward, certain attacks that appear to have gaps between hitboxes, such as Tatsumaki Senpukyaku and Lucas' down smash, actually consist of a single hitbox active throughout, which instead changes its hit bits to ignore opponents during the gaps, so that the attack can only hit each opponent once. In Ultimate, Lucas' down smash retains this behavior, but uses a rehit rate to re-allow one strike per hitbox.
+Rehit rate	Melee	If not 0, allows the hitbox to strike again after the specified amount of frames. Commonly used for multi-hit moves in later games.
+Angle flipper	Brawl	Changes how the hitbox's launch angle is applied, such as causing it to always launch opponents in the direction the user is facing, or the opposite, instead of depending on the attacker's position relative to the opponent. Used for various attacks such as forward tilts, forward smashes, forward aerials, and back aerials in Ultimate. Also used by Back Slash's back hit to launch opponents with a different animation that does not turn them around.
+Heedless	Brawl	If set, allows the hitbox to hit teammates even if team attack is turned off. Rarely used.
+Piercing	Brawl	If set, allows the hitbox to ignore invincibility. Rarely used.
+Disable hitlag	Brawl	If set, causes the hitbox to inflict no hitlag regardless of its hitlag multiplier. No longer used in Ultimate.
+Disable GFX	Brawl	Determines if a hitbox produces hit graphics if it connects. Usually disabled for "conventional" windboxes, producing a visual difference between pushing attacks such as F.L.U.D.D. and Finishing Touch.
+Stretch	Brawl	Determines if a hitbox is stretched out, rather than being spherical. This allows them to cover more space right away, but prevents them from interpolating per frame.
+X stretch/X2	Smash 4	Determines how far a hitbox is stretched horizontally, with the same other properties as the standard X position. Alongside the other stretch coordinates, this is essentially an extension of the stretch property from Brawl, denoting both ends of the hitbox.
+Y stretch/Y2	Smash 4	Determines how far a hitbox is stretched vertically, with the same other properties as the standard Y position.
+Z stretch/Z2	Smash 4	Determines how far a hitbox is stretched in the foreground/background, with the same other properties as the standard Z position.
+Set weight	Smash 4	If set, the hitbox calculates knockback with a weight of 100 for all opponents, effectively ignoring weight differences. This was a hitbox related flag in Smash 4, but became a property in Ultimate.
+Collision part	Ultimate	Determines what types of hurtboxes the hitbox can connect with (such as head, body, or legs). Used for Shield Breaker's effect of dealing more damage if it hits an opponent's head.
+Some other properties have been found, but their effect is currently unknown.
+
+Hitbox related flags
+These are flags used in an animation's script in order to create, alter, or remove different types of hitboxes.
+
+Flag	Introduced in	Description
+Hitbox	Smash 64	Creates a hitbox.
+Special hitbox	Smash 64	Creates a special hitbox.
+Collateral hitbox	Smash 64	Creates a hitbox that can only strike bystanders during a throw, and not the thrown opponent. Used for moves such as Mario's back throw.
+Change hitbox damage	Smash 64	Changes the damage of a specific hitbox.
+Change hitbox size	Smash 64	Changes the size of a specific hitbox.
+Remove hitbox	Smash 64	Deletes a specific hitbox.
+Remove all hitboxes	Smash 64	Deletes all active hitboxes.
+Hitbox loop	Smash 64	Causes part of a move's hitbox script to execute a specified amount of times instead of only once (akin to loop functions in programming languages), usually to repeatedly create and remove hitboxes. This allows the move to hit multiple times, and is how most multi-hit moves without a rehit rate are handled, especially in earlier games.
+Check front/back	Melee	Restricts the hitbox to only hitting opponents from the front or from behind. Used for Disable (can only hit from the front) and Back Slash (has two sets of hitboxes for the respective front and back hits).
+Grab collision	Brawl	Creates a grabbox. In Smash 64 and Melee, grabs used a normal hitbox with a grab effect.
+Grab collision 2	Brawl	Creates a special grabbox. Typically used for command grabs.
+Remove grab collision	Brawl	Deletes a specific grabbox.
+Remove all grab collisions	Brawl	Deletes all active grabboxes.
+Inert collision	Brawl	Creates an inert collision.
+Extended hitbox	Smash 4	Creates a hitbox that can be stretched.
+Extended special hitbox	Smash 4	Creates a special hitbox that can be stretched.
+Set falling speed	Smash 4	Determines whether the hitbox considers the target's falling speed when knockback is calculated. Used only in Smash 4 for Finishing Touch and Meteor Trampoline.
+Set gravity	Smash 4	Determines whether the hitbox considers the target's gravity when knockback is calculated. Used only in Smash 4 for Finishing Touch and Meteor Trampoline.
+Attack whole	Smash 4	Gives the hitbox unlimited range, regardless of what its radius is. Used for Arceus and the POW Block.
+Hitstun modifier	Ultimate	Changes the amount of hitstun the hitbox does when hitting an opponent. Due to a glitch, even if specified for certain hitboxes, it applies to all of a move's hitboxes until they are changed later in the script. However, some moves in later updates use a "revised" variant of the flag that properly applies hitstun modifiers only to the specified hitboxes.
+Shieldstun multiplier	Ultimate	Changes the amount of shieldstun the hitbox does to a shielding opponent. Due to a glitch, even if specified for certain hitboxes, it applies to all of a move's hitboxes until they are changed later in the script.
+Position vector	Ultimate	Causes the hitbox to launch the target towards a certain position within a certain number of frames, after which their launch speed proceeds normally. Used for a fair amount of multi-hits, chiefly those with the 368° autolink angle.
+Force knockback	Ultimate	Causes the hitbox to ignore any kind of armor when inflicting knockback. Used for counterattacks and most Final Smashes.
+Set attack height	Ultimate	If the attacker and target are at a (roughly) equal height, forces the target to use a specific kind of flinch animation (high, middle, or low) regardless of which of their hurtboxes is hit. Used for most down tilts and angled forward tilts.
+Critical hit	Ultimate	Causes only certain hitboxes of a move to produce a Special Zoom on hit. Used for moves such as Ganondorf's up tilt and a fully charged Wario Waft.
+No finish camera	Ultimate	Prevents the hitbox from producing a Finish Zoom, even if it would launch opponents far enough to do so. Generally used as a failsafe for certain multi-hit moves' linking portions.
+Disable tech	Ultimate	Prevents opponents from teching the hitbox's knockback. Only used for Cross Chop's falling portion and Onslaught's meteor smashing kick. A similar effect is present since Smash 4 for certain Final Smashes such as Pair Up, but not declared in hitbox scripts.
+Grab armor	Ultimate	If the hitbox strikes an opponent at the same time the user is grabbed by them, this property causes the opponent to armor through the hitbox and grab the user, much like in Brawl, rather than forcing a grab release. Used only for Sonic's Homing Attack, Spin Dash, and Spin Charge, as well as Banjo & Kazooie's Wonderwing. A multiplier can also be applied to the damage the grabber takes in this situation, which is set to 0.25× for Wonderwing.
+Angle modifier	Ultimate	Changes the hitbox's launch angle depending on the attacker's momentum, making it more vertical if moving backward, and more horizontal if moving forward. Only used for the last hit of the Mii Brawler's Helicopter Kick.
+Freeze multiplier	Ultimate	Modifies the initial amount of time a freezing hitbox freezes targets for. Used only for Hero's Kacrackle Slash, which has a 2× multiplier.
+Trapbox
+
+A hitbox stretching across interframe space.
+In Melee, a trapbox is the hitbox left on the ground during Ness' yo-yo glitch. It is called a trapbox because this hitbox is not attached at all to any kind of attack but instead just sits wherever it was when the glitch occurred. Using a new attack will overwrite the hitbox with the new attack's properties and relocate it to the new attack, which due to the interframe stretching effect will cause it to hit everything between it and Ness.
+
+Trivia
+
+An example of recoil animations making hitboxes appear to be unexpectedly large. Here, Ryu is hitting Lucina with a Shoryuken, with the blue starburst showing where the collision occurred.
+In Smash 64, grabs are normal hitboxes with no apparent mechanism for distinction from attacks. In Melee, grab hitboxes and inert hitboxes are 0%-damage hitboxes with "grab" or "inert" for an effect. Both grabs and inert hitboxes are separate objects in Brawl and Smash 4, though in rare cases a 0%-damage hitbox is used as an inert one.
+Shields, reflection bubbles and absorption bubbles use spherical collision boxes in Smash 64, as opposed to the standard cuboid collision boxes.
+The single largest hitbox in Melee can be found when Raikou is released from a Poké Ball.
+Because characters enter a recoil animation upon being hit, pausing the game during hitlag can make it appear as if the attack's hitboxes are misaligned or too large, when in reality, a fighter was simply in a different pose prior to entering the hit animation. This phenomenon is sometimes referred to as "hurtbox shifting".
+This is especially prominent in Ultimate with the addition of Special Zoom and Finish Zoom. When an attack triggers one of these effects, the resulting zoom-in and slowdown can cause this apparent discrepancy to be much more noticeable.
+Gallery
+The hitboxes of Kirby's forward tilt, with Kirby's collision boxes, in the original game.
+The hitboxes of Kirby's forward tilt, with Kirby's collision boxes, in the original game.
+ 
+
+
