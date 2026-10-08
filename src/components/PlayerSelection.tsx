@@ -47,7 +47,6 @@ const PlayerSelection: React.FC<PlayerSelectionProps> = ({
         </div>
       </div>
 
-      {/* Name Input */}
       <div className="name-section">
         <label>Name:</label>
         <input
@@ -60,7 +59,6 @@ const PlayerSelection: React.FC<PlayerSelectionProps> = ({
         />
       </div>
 
-      {/* Character Selection */}
       <div className="character-section">
         <label>Character:</label>
         <div className="character-grid">
@@ -91,7 +89,6 @@ const PlayerSelection: React.FC<PlayerSelectionProps> = ({
         </div>
       </div>
 
-      {/* Color Selection */}
       {selectedCharacter && (
         <div className="color-section">
           <label>Color:</label>
@@ -118,7 +115,6 @@ const PlayerSelection: React.FC<PlayerSelectionProps> = ({
         </div>
       )}
 
-      {/* Ready Button */}
       <div className="ready-section">
         <button
           className={`ready-button ${isReady ? 'ready' : ''}`}

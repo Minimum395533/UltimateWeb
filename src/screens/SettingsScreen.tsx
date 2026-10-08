@@ -1,12 +1,14 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useGameState } from '../hooks/useGameState';
 import '../styles/SettingsScreen.css';
 
 const SettingsScreen: React.FC = () => {
-  const { state, updateGameSettings, navigateTo } = useGameState();
+  const navigate = useNavigate();
+  const { state, updateGameSettings } = useGameState();
 
   const handleBack = () => {
-    navigateTo('start');
+    navigate('/');
   };
 
   const handleStocksChange = (e: React.ChangeEvent<HTMLInputElement>) => {

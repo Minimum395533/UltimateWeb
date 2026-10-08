@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useGameState } from '../hooks/useGameState';
 import { useInput } from '../hooks/useInput';
 import { SMASH_INPUTS } from '../types';
@@ -6,11 +7,12 @@ import type { PlayerKeybinds, InputBinding } from '../types';
 import '../styles/KeybindsScreen.css';
 
 const KeybindsScreen: React.FC = () => {
+  const navigate = useNavigate();
   const {
     state,
     selectPlayerForEdit,
     updatePlayerKeybinds,
-    navigateTo,
+    updatePlayerName,
   } = useGameState();
   
   const {
@@ -24,14 +26,12 @@ const KeybindsScreen: React.FC = () => {
   const [selectedPlayerIndex, setSelectedPlayerIndex] = useState<number>(0);
   const [editingInput, setEditingInput] = useState<string | null>(null);
 
-  // Sync with game state
   useEffect(() => {
     if (state.selectedPlayerIndex !== null) {
       setSelectedPlayerIndex(state.selectedPlayerIndex);
     }
   }, [state.selectedPlayerIndex]);
 
-  // Handle input detection
   useEffect(() => {
     const handleInputDetected = (e: any) => {
       const detectedInput = e.detail;
@@ -61,11 +61,11 @@ const KeybindsScreen: React.FC = () => {
   }, [editingInput, selectedPlayerIndex, state.players, updatePlayerKeybinds, stopListeningForInput]);
 
   const handleBack = () => {
-    navigateTo('start');
+    navigate('/');
   };
 
-  const handleNameChange = (_e: React.ChangeEvent<HTMLInputElement>) => {
-    // Will implement name change later
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    updatePlayerName(selectedPlayerIndex, e.target.value);
   };
 
   const handlePlayerSelect = (playerIndex: number) => {
@@ -109,7 +109,6 @@ const KeybindsScreen: React.FC = () => {
     <div className="keybinds-screen">
       <div className="background-overlay" />
       
-      {/* Header */}
       <div className="header">
         <button className="back-button" onClick={handleBack}>
           ← BACK
@@ -119,7 +118,6 @@ const KeybindsScreen: React.FC = () => {
       </div>
 
       <div className="content">
-        {/* Player Selection Tabs */}
         <div className="player-tabs">
           {state.players.map((player, index) => (
             <button
@@ -132,7 +130,6 @@ const KeybindsScreen: React.FC = () => {
           ))}
         </div>
 
-        {/* Name Edit Section */}
         <div className="section">
           <h2>Player Name</h2>
           <div className="name-edit">
@@ -146,7 +143,6 @@ const KeybindsScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* Device Selection */}
         <div className="section">
           <h2>Input Device</h2>
           <div className="device-selector">
@@ -155,7 +151,7 @@ const KeybindsScreen: React.FC = () => {
                 type="radio"
                 name="device"
                 value="keyboard"
-                checked={true} // For now, always keyboard
+                checked={true}
                 onChange={() => {}}
               />
               <span>Keyboard</span>
@@ -173,7 +169,6 @@ const KeybindsScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* Keybinds Table */}
         <div className="section">
           <h2>Keybinds</h2>
           <div className="keybinds-instructions">

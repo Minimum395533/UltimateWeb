@@ -1,12 +1,12 @@
 import React from 'react';
-import { useGameState } from '../hooks/useGameState';
+import { useNavigate } from 'react-router-dom';
 import '../styles/TrainingScreen.css';
 
 const TrainingScreen: React.FC = () => {
-  const { navigateTo } = useGameState();
+  const navigate = useNavigate();
 
   const handleBack = () => {
-    navigateTo('start');
+    navigate('/');
   };
 
   return (

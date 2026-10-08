@@ -1,10 +1,12 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useGameState } from '../hooks/useGameState';
 import { characters } from '../data/characters';
 import PlayerSelection from '../components/PlayerSelection';
 import '../styles/LocalPlayScreen.css';
 
 const LocalPlayScreen: React.FC = () => {
+  const navigate = useNavigate();
   const {
     state,
     updatePlayerName,
@@ -13,7 +15,6 @@ const LocalPlayScreen: React.FC = () => {
     togglePlayerReady,
     canStartLocalGame,
     allPlayersReady,
-    navigateTo,
   } = useGameState();
 
   const handleStartGame = () => {
@@ -23,10 +24,9 @@ const LocalPlayScreen: React.FC = () => {
   };
 
   const handleBack = () => {
-    navigateTo('start');
+    navigate('/');
   };
 
-  // Get character display name
   const getCharacterDisplayName = (characterId: string) => {
     const character = characters.find(c => c.id === characterId);
     return character ? character.displayName : 'Unknown';
@@ -36,7 +36,6 @@ const LocalPlayScreen: React.FC = () => {
     <div className="local-play-screen">
       <div className="background-overlay" />
       
-      {/* Header */}
       <div className="header">
         <button className="back-button" onClick={handleBack}>
           ← BACK
@@ -45,7 +44,6 @@ const LocalPlayScreen: React.FC = () => {
         <div className="header-spacer" />
       </div>
 
-      {/* Player Selection Area */}
       <div className="player-selection-container">
         {state.players.map((player, index) => (
           <PlayerSelection
@@ -62,7 +60,6 @@ const LocalPlayScreen: React.FC = () => {
         ))}
       </div>
 
-      {/* Start Button */}
       {canStartLocalGame && (
         <div className="start-button-container">
           <button
@@ -75,7 +72,6 @@ const LocalPlayScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Status indicators */}
       <div className="status-indicators">
         {state.players.map((player, index) => (
           <div key={player.id} className={`status-indicator ${player.isReady ? 'ready' : 'not-ready'}`}>
