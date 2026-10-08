@@ -27,6 +27,7 @@ const TrainingScreen: React.FC = () => {
   const player = state.players[0];
   const [movement, setMovement] = useState(createInitialTrainingMovementState);
   const [cameraFollowEnabled, setCameraFollowEnabled] = useState(true);
+  const [stageZoom, setStageZoom] = useState<'blastzone' | 'camera'>('blastzone');
   const movementRef = useRef<TrainingMovementState>(createInitialTrainingMovementState());
   const pressedKeys = useRef(new Set<string>());
   const newlyPressedKeys = useRef(new Set<string>());
@@ -150,6 +151,18 @@ const TrainingScreen: React.FC = () => {
   const cameraRightPercent = worldToMapX(Number(TRAINING_CAMERA_LIMITS.right));
   const cameraTopPercent = worldToMapY(Number(TRAINING_CAMERA_LIMITS.top));
   const cameraBottomPercent = worldToMapY(Number(TRAINING_CAMERA_LIMITS.bottom));
+  const cameraBoundsWidth =
+    Number(TRAINING_CAMERA_LIMITS.right) - Number(TRAINING_CAMERA_LIMITS.left);
+  const cameraBoundsHeight =
+    Number(TRAINING_CAMERA_LIMITS.top) - Number(TRAINING_CAMERA_LIMITS.bottom);
+  const stageZoomScale = stageZoom === 'camera'
+    ? Math.min(blastzoneWidth / cameraBoundsWidth, blastzoneHeight / cameraBoundsHeight) * 0.9
+    : 1;
+  const cameraCenterPercent = worldToMapY(
+    (Number(TRAINING_CAMERA_LIMITS.top) + Number(TRAINING_CAMERA_LIMITS.bottom)) / 2,
+  );
+  const stageZoomTranslateY =
+    stageZoom === 'camera' ? (50 - cameraCenterPercent) * stageZoomScale : 0;
   const fighterPositionPercent = worldToMapX(fighterWorldX);
   const fighterHeightPercent = worldToMapY(Number(movement.positionY));
   const speed = Math.abs(Number(movement.velocityX));
@@ -207,59 +220,99 @@ const TrainingScreen: React.FC = () => {
           </div>
         </div>
 
-        <div className="training-stage" aria-label="Training stage bounds map">
-          <div className="stage-grid" aria-hidden="true" />
-          <div className="stage-blastzone" aria-hidden="true" />
-          <span className="stage-blastzone-label">BLASTZONE</span>
+        <div className="stage-view-controls">
+          <span className="stage-view-caption">STAGE VIEW</span>
+          <div className="stage-zoom-toggle" role="group" aria-label="Stage map zoom">
+            <button
+              type="button"
+              aria-pressed={stageZoom === 'blastzone'}
+              onClick={() => setStageZoom('blastzone')}
+            >
+              Blastzone
+            </button>
+            <button
+              type="button"
+              aria-pressed={stageZoom === 'camera'}
+              onClick={() => setStageZoom('camera')}
+            >
+              Camera limits
+            </button>
+          </div>
+        </div>
+
+        <div
+          className={`training-stage is-zoomed-to-${stageZoom}`}
+          aria-label={`Training stage map zoomed to ${stageZoom === 'blastzone' ? 'blastzone' : 'camera limits'}`}
+        >
           <div
-            className="stage-camera-limits"
+            className="stage-world"
             style={{
-              left: `${cameraLeftPercent}%`,
-              top: `${cameraTopPercent}%`,
-              width: `${cameraRightPercent - cameraLeftPercent}%`,
-              height: `${cameraBottomPercent - cameraTopPercent}%`,
-            }}
-            aria-hidden="true"
-          />
-          <span
-            className="stage-camera-label"
-            style={{
-              left: `${cameraLeftPercent}%`,
-              top: `${cameraTopPercent}%`,
+              transform: `translateY(${stageZoomTranslateY}%) scale(${stageZoomScale})`,
+              transformOrigin: '50% 50%',
             }}
           >
-            CAMERA LIMITS
+            <div className="stage-grid" aria-hidden="true" />
+            <div className="stage-blastzone" aria-hidden="true" />
+            <div
+              className="stage-camera-limits"
+              style={{
+                left: `${cameraLeftPercent}%`,
+                top: `${cameraTopPercent}%`,
+                width: `${cameraRightPercent - cameraLeftPercent}%`,
+                height: `${cameraBottomPercent - cameraTopPercent}%`,
+              }}
+              aria-hidden="true"
+            />
+            {stageZoom === 'blastzone' && (
+              <span
+                className="stage-camera-label"
+                style={{
+                  left: `${cameraLeftPercent}%`,
+                  top: `${cameraTopPercent}%`,
+                }}
+              >
+                CAMERA LIMITS
+              </span>
+            )}
+            <div
+              className="stage-platform"
+              style={{
+                left: `${stageLeftPercent}%`,
+                width: `${stageRightPercent - stageLeftPercent}%`,
+                top: `${platformTopPercent}%`,
+                height: `${platformBottomPercent - platformTopPercent}%`,
+              }}
+              aria-hidden="true"
+            />
+            <span
+              className="stage-platform-label"
+              style={{
+                top: `${platformTopPercent + (platformBottomPercent - platformTopPercent) * 0.7}%`,
+              }}
+            >
+              OMEGA · {Number(TRAINING_STAGE_WIDTH)} u
+            </span>
+            <div
+              className="stage-camera-marker"
+              style={{ left: `${cameraXPercent}%`, top: `${cameraYPercent}%` }}
+              aria-hidden="true"
+            />
+            <div
+              className={`training-bean is-${movement.mode}${movement.isGrounded ? '' : ' is-airborne'}${movement.isFastFalling ? ' is-fast-falling' : ''}`}
+              style={{
+                left: `${fighterPositionPercent}%`,
+                top: `${fighterHeightPercent}%`,
+              }}
+              role="img"
+              aria-label="Simple Captain Falcon movement prototype"
+            />
+          </div>
+          <span className="stage-blastzone-label">
+            {stageZoom === 'blastzone' ? 'BLASTZONE' : 'CAMERA LIMITS'}
           </span>
           <div className="stage-camera-readout">
             CAMERA {cameraFollowEnabled ? 'FOLLOW' : 'CENTER'}&nbsp; X {Number(cameraPosition.positionX).toFixed(0)} · Y {Number(cameraPosition.positionY).toFixed(0)} u
           </div>
-          <div
-            className="stage-platform"
-            style={{
-              left: `${stageLeftPercent}%`,
-              width: `${stageRightPercent - stageLeftPercent}%`,
-              top: `${platformTopPercent}%`,
-              height: `${platformBottomPercent - platformTopPercent}%`,
-            }}
-            aria-hidden="true"
-          />
-          <span className="stage-platform-label" style={{ top: `${platformTopPercent + (platformBottomPercent - platformTopPercent) * 0.7}%` }}>
-            OMEGA · {Number(TRAINING_STAGE_WIDTH)} u
-          </span>
-          <div
-            className="stage-camera-marker"
-            style={{ left: `${cameraXPercent}%`, top: `${cameraYPercent}%` }}
-            aria-hidden="true"
-          />
-          <div
-            className={`training-bean is-${movement.mode}${movement.isGrounded ? '' : ' is-airborne'}${movement.isFastFalling ? ' is-fast-falling' : ''}`}
-            style={{
-              left: `${fighterPositionPercent}%`,
-              top: `${fighterHeightPercent}%`,
-            }}
-            role="img"
-            aria-label="Simple Captain Falcon movement prototype"
-          />
         </div>
 
         <div className="movement-readout" aria-label="Current movement state">
@@ -298,6 +351,7 @@ const TrainingScreen: React.FC = () => {
           <p><strong>Analog:</strong> light tilt walks at a scaled speed; a quick full flick dashes; holding full tilt runs.</p>
           <p><strong>Jump:</strong> J / Space, your jump rebinds, or enabled Stick Jump. Hold through the 3-frame squat for a full hop; release during it for a short hop. Press jump again in the air for Falcon’s midair jump.</p>
           <p><strong>Camera:</strong> toggle follow on to track the fighter within the inner camera limits; turn it off to keep the camera at stage center.</p>
+          <p><strong>Stage view:</strong> use Blastzone to see the full field or Camera limits to zoom into the inner bounds.</p>
           <p><strong>Fall:</strong> walk or run off either ledge. Hold your down binding (S by default) or tilt the stick down while falling to fast-fall.</p>
           <p><strong>Omega platform:</strong> {Number(TRAINING_STAGE_WIDTH)} u wide, with open ledges at ±{Number(TRAINING_STAGE_HALF_WIDTH)} u.</p>
           <p><strong>Captain Falcon:</strong> gravity {Number(CAPTAIN_FALCON_MOVEMENT.gravity).toFixed(2)} u/frame² · walk {Number(CAPTAIN_FALCON_MOVEMENT.walkSpeed).toFixed(3)} · initial dash {Number(CAPTAIN_FALCON_MOVEMENT.initialDashSpeed).toFixed(3)} · run {Number(CAPTAIN_FALCON_MOVEMENT.runSpeed).toFixed(3)} · fall {Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed).toFixed(3)} · fast fall {Number(CAPTAIN_FALCON_MOVEMENT.fastFallSpeed).toFixed(3)} u/frame.</p>

@@ -84,6 +84,52 @@
   color: #42d8ee;
 }
 
+.stage-view-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: min(100%, 820px);
+  margin: 0 auto 10px;
+}
+
+.stage-view-caption {
+  color: var(--text-secondary);
+  font-family: var(--font-title);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.stage-zoom-toggle {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: rgba(12, 18, 30, 0.72);
+}
+
+.stage-zoom-toggle button {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #c9d5e3;
+  font: 700 0.72rem var(--font-title);
+  cursor: pointer;
+}
+
+.stage-zoom-toggle button[aria-pressed="true"] {
+  background: #42d8ee;
+  color: #101a28;
+}
+
+.stage-zoom-toggle button:focus-visible {
+  outline: 2px solid #ffd18d;
+  outline-offset: 2px;
+}
+
 .training-stage {
   position: relative;
   container-type: inline-size;
@@ -94,6 +140,13 @@
   background:
     radial-gradient(ellipse at 50% 50%, rgba(23, 126, 158, 0.13), transparent 70%),
     #111b2a;
+}
+
+.stage-world {
+  position: absolute;
+  inset: 0;
+  transition: transform 220ms ease;
+  will-change: transform;
 }
 
 .stage-grid {
@@ -328,6 +381,15 @@
     top: 5px;
     left: 7px;
     letter-spacing: 0.04em;
+  }
+
+  .stage-view-controls {
+    gap: 6px;
+  }
+
+  .stage-zoom-toggle button {
+    padding: 6px 8px;
+    font-size: 0.67rem;
   }
 
   .stage-camera-readout {
