@@ -2,9 +2,9 @@ import {
   unitsPerFrame,
   unitsPerFrameSquared,
   worldUnits,
-} from './units';
-import type { WorldUnit, WorldUnitsPerFrame } from './units';
-import { getFastInputWindowFrames } from './controllerSettings';
+} from './units.ts';
+import type { WorldUnit, WorldUnitsPerFrame } from './units.ts';
+import { getFastInputWindowFrames } from './controllerSettings.ts';
 import type { PlayerControllerSettings } from '../types';
 import type { TrainingControlInput } from './trainingInput';
 
@@ -116,7 +116,8 @@ function startDash(
     facingDirection: direction,
     inputDirection: direction,
     framesInDirection,
-    framesInPhase: 0,
+    // The input transition is the first frame of the dash animation.
+    framesInPhase: 1,
     walkBand: 0,
     stickJumpAction: input.stickJumpAction,
   };

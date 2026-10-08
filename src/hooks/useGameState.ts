@@ -48,12 +48,9 @@ const initialState: AppState = {
 };
 
 export function useGameState() {
-  const [state, setState] = useState<AppState>(initialState);
-
-  // Load state from localStorage on initial load
-  useEffect(() => {
-    setState(loadAppState(localStorage, initialState));
-  }, []);
+  const [state, setState] = useState<AppState>(
+    () => loadAppState(localStorage, initialState),
+  );
 
   // Save state to localStorage whenever it changes
   useEffect(() => {

@@ -1,13 +1,12 @@
 import {
   DEFAULT_KEYBINDS_GAMEPAD,
   DEFAULT_KEYBINDS_KEYBOARD_P1,
-} from '../types';
+} from '../types/index.ts';
 import type { InputBinding, PlayerKeybinds } from '../types';
 import {
   normalizeControllerSettings,
   shouldTriggerStickJump,
-} from './controllerSettings';
-import type { PlayerControllerSettings } from '../types';
+} from './controllerSettings.ts';
 
 export const GAMEPAD_AXIS_DEADZONE = 0.12;
 

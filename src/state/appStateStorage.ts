@@ -1,4 +1,4 @@
-import { normalizeControllerSettings } from '../physics/controllerSettings';
+import { normalizeControllerSettings } from '../physics/controllerSettings.ts';
 import type { AppState, PlayerKeybinds, PlayerProfile } from '../types';
 
 export const APP_STATE_STORAGE_KEY = 'ultimateWebState';
@@ -37,12 +37,14 @@ export function loadAppState(storage: AppStateStorage, fallback: AppState): AppS
     if (!isRecord(savedValue)) return fallback;
 
     const savedPlayers = Array.isArray(savedValue.players) ? savedValue.players : [];
-    const players = (savedPlayers.length > 0 ? savedPlayers : fallback.players).map(
-      (player, index) => mergePlayer(
-        player,
-        fallback.players[index] ?? fallback.players[0],
-      ),
-    );
+    const players = fallback.players.map((defaultPlayer, index) =>
+      mergePlayer(savedPlayers[index], defaultPlayer));
+    for (let index = fallback.players.length; index < savedPlayers.length; index += 1) {
+      const defaultPlayer = fallback.players[0];
+      if (defaultPlayer && isRecord(savedPlayers[index])) {
+        players.push(mergePlayer(savedPlayers[index], defaultPlayer));
+      }
+    }
     const savedGameSettings = isRecord(savedValue.gameSettings)
       ? savedValue.gameSettings
       : {};
