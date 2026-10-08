@@ -87,13 +87,13 @@
 .training-stage {
   position: relative;
   container-type: inline-size;
-  height: clamp(230px, 38vw, 390px);
+  width: min(100%, 820px);
+  margin: 0 auto;
+  aspect-ratio: 480 / 319;
   overflow: hidden;
-  border: 1px solid rgba(150, 190, 220, 0.28);
-  border-radius: 12px;
   background:
-    radial-gradient(ellipse at 50% 100%, rgba(23, 126, 158, 0.2), transparent 65%),
-    linear-gradient(180deg, #101b2b 0%, #1a293b 74%, #283d52 100%);
+    radial-gradient(ellipse at 50% 50%, rgba(23, 126, 158, 0.13), transparent 70%),
+    #111b2a;
 }
 
 .stage-grid {
@@ -103,94 +103,118 @@
   background-image:
     linear-gradient(rgba(178, 212, 232, 0.08) 1px, transparent 1px),
     linear-gradient(90deg, rgba(178, 212, 232, 0.08) 1px, transparent 1px);
-  background-size: 8.333% 25%;
+  background-size: 8.333% 12.54%;
 }
 
-.stage-caption {
+.stage-blastzone,
+.stage-camera-limits {
   position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.stage-blastzone {
   z-index: 1;
-  top: 14px;
-  left: 16px;
-  color: #e6f3fb;
+  inset: 0;
+  border: 2px dashed rgba(239, 104, 80, 0.85);
+}
+
+.stage-camera-limits {
+  z-index: 2;
+  border: 2px dashed rgba(255, 190, 92, 0.9);
+  background: rgba(255, 190, 92, 0.025);
+}
+
+.stage-blastzone-label,
+.stage-camera-label,
+.stage-camera-readout,
+.stage-platform-label {
+  position: absolute;
   font-family: var(--font-title);
-  font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.1em;
+  pointer-events: none;
 }
 
-.stage-caption span {
-  margin-left: 9px;
-  color: #8a9aaf;
+.stage-blastzone-label {
+  z-index: 3;
+  top: 8px;
+  left: 12px;
+  color: #f18c76;
+  font-size: clamp(0.52rem, 1.2vw, 0.68rem);
+}
+
+.stage-camera-label {
+  z-index: 3;
+  padding: 3px 5px;
+  border-radius: 3px;
+  background: rgba(17, 27, 42, 0.8);
+  color: #ffd18d;
+  font-size: clamp(0.48rem, 1.05vw, 0.62rem);
+  letter-spacing: 0.07em;
+  white-space: nowrap;
+}
+
+.stage-camera-readout {
+  z-index: 3;
+  top: 8px;
+  right: 12px;
+  color: #d1dfed;
   font-family: var(--font-mono);
-  font-size: 0.65rem;
+  font-size: clamp(0.48rem, 1.05vw, 0.62rem);
   font-weight: 600;
   letter-spacing: 0.04em;
 }
 
 .stage-platform {
   position: absolute;
-  z-index: 1;
-  bottom: calc(52% - 16px);
-  height: 16px;
+  z-index: 3;
+  box-sizing: border-box;
   border-top: 3px solid #45d8ee;
   background: linear-gradient(180deg, #425b70 0%, #1a2838 100%);
   box-shadow: 0 9px 22px rgba(0, 0, 0, 0.35), 0 0 18px rgba(59, 211, 239, 0.35);
-  clip-path: polygon(0 0, 100% 0, 98.5% 100%, 1.5% 100%);
+  clip-path: polygon(0 0, 100% 0, 100% 8%, 88% 52%, 76% 78%, 66% 100%, 34% 100%, 24% 78%, 12% 52%, 0 8%);
 }
 
-.stage-platform::before,
-.stage-platform::after {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: #9af5ff;
-  content: '';
-}
-
-.stage-platform::before {
-  left: 0;
-}
-
-.stage-platform::after {
-  right: 0;
-}
-
-.stage-axis {
-  position: absolute;
-  z-index: 1;
-  inset: auto 0 calc(52% - 49px);
-  height: 14px;
-  color: rgba(226, 238, 248, 0.72);
-  font-family: var(--font-mono);
-  font-size: 0.63rem;
-}
-
-.stage-axis-label {
-  position: absolute;
-  transform: translateX(-50%);
+.stage-platform-label {
+  z-index: 4;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #f4f8fc;
+  font-size: clamp(0.48rem, 1.05vw, 0.68rem);
+  letter-spacing: 0.04em;
   white-space: nowrap;
 }
 
-.stage-axis-label:first-child,
-.stage-axis-label:last-child {
-  color: #59dced;
+.stage-camera-marker {
+  position: absolute;
+  z-index: 4;
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(255, 205, 125, 0.95);
+  border-radius: 50%;
+  background: rgba(255, 190, 92, 0.14);
+  box-shadow: 0 0 10px rgba(255, 190, 92, 0.45);
+  transform: translate(-50%, -50%);
 }
 
-.stage-axis-label:last-child {
-  transform: translateX(-100%);
+.stage-camera-marker::after {
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: #ffd18d;
+  content: '';
 }
 
 .training-bean {
   position: absolute;
-  z-index: 2;
-  bottom: 52%;
-  width: 48px;
-  height: 116px;
+  z-index: 5;
+  transform: translate(-50%, -100%);
+  width: clamp(12px, 2.2cqw, 18px);
+  height: clamp(24px, 5.1cqw, 42px);
   border-radius: 50%;
   background: #cf2836;
   box-shadow: 0 0 26px rgba(207, 40, 54, 0.26);
-  transform: translateX(-50%);
   transition: background-color 100ms linear;
 }
 
@@ -300,9 +324,16 @@
     white-space: nowrap;
   }
 
-  .training-bean {
-    width: 34px;
-    height: 80px;
+  .stage-blastzone-label {
+    top: 5px;
+    left: 7px;
+    letter-spacing: 0.04em;
+  }
+
+  .stage-camera-readout {
+    top: 5px;
+    right: 7px;
+    letter-spacing: 0;
   }
 
   .training-content {

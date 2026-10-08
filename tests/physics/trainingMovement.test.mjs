@@ -7,15 +7,15 @@ import {
 } from '../../src/physics/controllerSettings.ts';
 import {
   CAPTAIN_FALCON_MOVEMENT,
-  TRAINING_CAMERA_DEADZONE,
-  TRAINING_CAMERA_HALF_WIDTH,
-  TRAINING_RESPAWN_DEPTH,
+  TRAINING_BLASTZONE_BOUNDS,
+  TRAINING_CAMERA_LIMITS,
   TRAINING_STAGE_HALF_WIDTH,
   TRAINING_STAGE_WIDTH,
   createInitialTrainingMovementState,
+  getTrainingCameraPosition,
   stepTrainingMovement,
 } from '../../src/physics/trainingMovement.ts';
-import { worldUnits } from '../../src/physics/units.ts';
+import { unitsPerFrame, worldUnits } from '../../src/physics/units.ts';
 import {
   applyAnalogDeadzone,
   readTrainingControlInput,
@@ -45,17 +45,42 @@ function createGamepad(axes = [0, 0], buttonIndexes = []) {
   return { axes, buttons };
 }
 
-test('the Omega training platform is 160 units long and exposes both ledges', () => {
+test('training stage bounds match the diagram scaled to the 160-unit Omega platform', () => {
   assert.equal(Number(TRAINING_STAGE_WIDTH), 160);
   assert.equal(Number(TRAINING_STAGE_HALF_WIDTH), 80);
-  assert.equal(Number(TRAINING_CAMERA_HALF_WIDTH), 100);
-  assert.equal(Number(TRAINING_CAMERA_DEADZONE), 40);
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.entries(TRAINING_BLASTZONE_BOUNDS).map(([edge, value]) => [edge, Number(value)]),
+    ),
+    { left: -240, right: 240, bottom: -140, top: 179 },
+  );
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.entries(TRAINING_CAMERA_LIMITS).map(([edge, value]) => [edge, Number(value)]),
+    ),
+    { left: -180, right: 180, bottom: -60, top: 130 },
+  );
 });
 
-test('Captain Falcon normal and fast-fall caps match the supplied values', () => {
+test('the camera follows the fighter and clamps within the camera-limit rectangle', () => {
+  assert.deepEqual(
+    getTrainingCameraPosition(worldUnits(42), worldUnits(28)),
+    { positionX: 42, positionY: 28 },
+  );
+  assert.deepEqual(
+    getTrainingCameraPosition(worldUnits(220), worldUnits(160)),
+    { positionX: 180, positionY: 130 },
+  );
+  assert.deepEqual(
+    getTrainingCameraPosition(worldUnits(-220), worldUnits(-90)),
+    { positionX: -180, positionY: -60 },
+  );
+});
+
+test('Captain Falcon gravity and normal and fast-fall caps match the supplied values', () => {
+  assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.gravity), 0.12);
   assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed), 1.865);
   assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.fastFallSpeed), 2.984);
-  assert.equal(Number(TRAINING_RESPAWN_DEPTH), 50);
 });
 
 test('down input reads keyboard, analog stick, and D-pad fast-fall controls', () => {
@@ -117,7 +142,7 @@ test('normal falling accelerates up to the supplied fall-speed cap', () => {
   }
   assert.equal(state.isGrounded, false);
   assert.equal(Number(state.velocityY), -Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed));
-  assert.ok(Number(state.positionY) > -Number(TRAINING_RESPAWN_DEPTH));
+  assert.ok(Number(state.positionY) > Number(TRAINING_BLASTZONE_BOUNDS.bottom));
 });
 
 test('holding down in the air reaches fast-fall speed and releasing returns to normal cap', () => {
@@ -130,7 +155,7 @@ test('holding down in the air reaches fast-fall speed and releasing returns to n
   }
   assert.equal(state.isFastFalling, true);
   assert.equal(Number(state.velocityY), -Number(CAPTAIN_FALCON_MOVEMENT.fastFallSpeed));
-  assert.ok(Number(state.positionY) > -Number(TRAINING_RESPAWN_DEPTH));
+  assert.ok(Number(state.positionY) > Number(TRAINING_BLASTZONE_BOUNDS.bottom));
 
   state = stepTrainingMovement(state, analog(0), DEFAULT_CONTROLLER_SETTINGS);
   assert.equal(state.isFastFalling, false);
@@ -148,21 +173,61 @@ test('down input does not fast-fall while the fighter is supported', () => {
   assert.equal(Number(state.velocityY), 0);
 });
 
-test('falling past the training depth respawns the fighter on the platform', () => {
-  const state = stepTrainingMovement(
+test('crossing any edge of the blastzone respawns the fighter on the platform', () => {
+  const initial = createInitialTrainingMovementState();
+  const edgeCases = [
     {
-      ...createInitialTrainingMovementState(),
-      positionX: worldUnits(Number(TRAINING_STAGE_HALF_WIDTH) + 1),
-      positionY: worldUnits(-49.9),
-      velocityY: worldUnits(-1.865),
-      isGrounded: false,
+      name: 'left',
+      state: {
+        ...initial,
+        positionX: worldUnits(-239.9),
+        velocityX: unitsPerFrame(-0.2),
+        isGrounded: false,
+        mode: 'run',
+        inputDirection: -1,
+      },
+      input: digital(-1),
     },
-    analog(0),
-    DEFAULT_CONTROLLER_SETTINGS,
-  );
-  assert.equal(state.isGrounded, true);
-  assert.equal(Number(state.positionX), 0);
-  assert.equal(Number(state.positionY), 0);
+    {
+      name: 'right',
+      state: {
+        ...initial,
+        positionX: worldUnits(239.9),
+        velocityX: unitsPerFrame(0.2),
+        isGrounded: false,
+        mode: 'run',
+        inputDirection: 1,
+      },
+      input: digital(1),
+    },
+    {
+      name: 'top',
+      state: {
+        ...initial,
+        positionY: worldUnits(178.5),
+        velocityY: unitsPerFrame(1),
+        isGrounded: false,
+      },
+      input: analog(0),
+    },
+    {
+      name: 'bottom',
+      state: {
+        ...initial,
+        positionY: worldUnits(-139.5),
+        velocityY: unitsPerFrame(-1.8),
+        isGrounded: false,
+      },
+      input: analog(0),
+    },
+  ];
+
+  for (const { name, state: edgeState, input } of edgeCases) {
+    const state = stepTrainingMovement(edgeState, input, DEFAULT_CONTROLLER_SETTINGS);
+    assert.equal(Number(state.positionX), 0, `${name} edge resets x`);
+    assert.equal(Number(state.positionY), 0, `${name} edge resets y`);
+    assert.equal(state.isGrounded, true, `${name} edge returns to the platform`);
+  }
 });
 
 test('Captain Falcon movement values match the supplied Ultimate stats', () => {

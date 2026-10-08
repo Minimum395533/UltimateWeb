@@ -219,17 +219,6 @@ const TrainingScreen: React.FC = () => {
           <span className="stage-platform-label" style={{ top: `${platformTopPercent + (platformBottomPercent - platformTopPercent) * 0.7}%` }}>
             OMEGA · {Number(TRAINING_STAGE_WIDTH)} u
           </span>
-          <div className="stage-axis" aria-hidden="true">
-            <span className="stage-axis-label" style={{ left: `${stageLeftPercent}%` }}>
-              −{Number(TRAINING_STAGE_HALF_WIDTH)} u · LEDGE
-            </span>
-            <span className="stage-axis-label" style={{ left: `${worldToMapX(0)}%` }}>
-              0 u
-            </span>
-            <span className="stage-axis-label" style={{ left: `${stageRightPercent}%` }}>
-              +{Number(TRAINING_STAGE_HALF_WIDTH)} u · LEDGE
-            </span>
-          </div>
           <div
             className="stage-camera-marker"
             style={{ left: `${cameraXPercent}%`, top: `${cameraYPercent}%` }}
@@ -277,7 +266,9 @@ const TrainingScreen: React.FC = () => {
           <p><strong>Move:</strong> A / D, your rebinds, or the gamepad D-pad or left stick.</p>
           <p><strong>Analog:</strong> light tilt walks at a scaled speed; a quick full flick dashes; holding full tilt runs.</p>
           <p><strong>Fall:</strong> walk or run off either ledge. Hold your down binding (S by default) or tilt the stick down while falling to fast-fall.</p>
-          <p><strong>Captain Falcon speeds:</strong> walk {Number(CAPTAIN_FALCON_MOVEMENT.walkSpeed).toFixed(3)} · initial dash {Number(CAPTAIN_FALCON_MOVEMENT.initialDashSpeed).toFixed(3)} · run {Number(CAPTAIN_FALCON_MOVEMENT.runSpeed).toFixed(3)} · fall {Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed).toFixed(3)} · fast fall {Number(CAPTAIN_FALCON_MOVEMENT.fastFallSpeed).toFixed(3)} u/frame.</p>
+          <p><strong>Omega platform:</strong> {Number(TRAINING_STAGE_WIDTH)} u wide, with open ledges at ±{Number(TRAINING_STAGE_HALF_WIDTH)} u.</p>
+          <p><strong>Captain Falcon:</strong> gravity {Number(CAPTAIN_FALCON_MOVEMENT.gravity).toFixed(2)} u/frame² · walk {Number(CAPTAIN_FALCON_MOVEMENT.walkSpeed).toFixed(3)} · initial dash {Number(CAPTAIN_FALCON_MOVEMENT.initialDashSpeed).toFixed(3)} · run {Number(CAPTAIN_FALCON_MOVEMENT.runSpeed).toFixed(3)} · fall {Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed).toFixed(3)} · fast fall {Number(CAPTAIN_FALCON_MOVEMENT.fastFallSpeed).toFixed(3)} u/frame.</p>
+          <p><strong>Diagram-scaled bounds:</strong> blastzone x ±240, y −140 to +179 u · camera x ±180, y −60 to +130 u. These bounds are approximate and scaled from the supplied image.</p>
           <p className="training-note">Stick Jump only reports its input here. Jump physics and attacks are not implemented.</p>
         </div>
       </section>
