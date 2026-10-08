@@ -142,7 +142,7 @@ const SettingsScreen: React.FC = () => {
             />
           </div>
           <p className="controller-setting-help">
-            When enabled, tilting the left stick up emits the jump input. Jump motion is not part of this training test.
+            When enabled, tilting the left stick up triggers a jump. Jump buttons work either way; hold through the 3-frame squat for a full hop or release during it for a short hop.
           </p>
           <div className="setting-row sensitivity-setting">
             <label htmlFor="stick-sensitivity">Stick Sensitivity</label>

@@ -157,9 +157,8 @@ function launchVelocityForHeight(height: number, gravity: number): number {
   }
 
   for (let frames = 1; frames <= 2000; frames += 1) {
-    const velocity =
-      (height + gravity * frames * (frames - 1) / 2) / frames;
-    if (velocity > gravity * (frames - 1) && velocity <= gravity * frames) {
+    const velocity = height / frames + gravity * (frames + 1) / 2;
+    if (velocity >= gravity * frames && velocity < gravity * (frames + 1)) {
       return velocity;
     }
   }
@@ -194,7 +193,7 @@ function advanceVerticalMovement(
   input: TrainingControlInput,
 ): TrainingMovementState {
   const jumpHeld = Boolean(input.jumpHeld || input.stickJumpAction);
-  const jumpPressed = jumpHeld && !state.jumpInputHeld;
+  const jumpPressed = Boolean(input.jumpPressed || (jumpHeld && !state.jumpInputHeld));
   const inputState = {
     ...state,
     jumpInputHeld: jumpHeld,
@@ -287,7 +286,8 @@ function advanceVerticalMovement(
     };
   }
 
-  if (jumpPressed && airborneState.jumpsUsed === 1) {
+  const airJumpsUsed = Math.max(0, airborneState.jumpsUsed - 1);
+  if (jumpPressed && airJumpsUsed < CAPTAIN_FALCON_MOVEMENT.maxAirJumps) {
     return {
       ...airborneState,
       velocityY: unitsPerFrame(launchVelocityForHeight(
@@ -296,7 +296,7 @@ function advanceVerticalMovement(
       )),
       isGrounded: false,
       isFastFalling: false,
-      jumpsUsed: 2,
+      jumpsUsed: airborneState.jumpsUsed + 1,
       jumpSquatFramesRemaining: 0,
       shortHopRequested: false,
       jumpInitialFramesRemaining: 0,

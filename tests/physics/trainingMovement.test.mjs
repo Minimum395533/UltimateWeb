@@ -29,12 +29,18 @@ import {
   DEFAULT_KEYBINDS_KEYBOARD_P1,
 } from '../../src/types/index.ts';
 
-function analog(horizontal, stickJumpAction = false, downHeld = false) {
-  return { horizontal, isDigital: false, stickJumpAction, downHeld };
+function analog(
+  horizontal,
+  stickJumpAction = false,
+  downHeld = false,
+  jumpHeld = stickJumpAction,
+  jumpPressed = false,
+) {
+  return { horizontal, isDigital: false, stickJumpAction, downHeld, jumpHeld, jumpPressed };
 }
 
-function digital(horizontal, downHeld = false) {
-  return { horizontal, isDigital: true, stickJumpAction: false, downHeld };
+function digital(horizontal, downHeld = false, jumpHeld = false, jumpPressed = false) {
+  return { horizontal, isDigital: true, stickJumpAction: false, downHeld, jumpHeld, jumpPressed };
 }
 
 function createGamepad(axes = [0, 0], buttonIndexes = []) {
@@ -130,6 +136,21 @@ test('a fighter can walk off an open ledge and begin falling', () => {
   assert.equal(fellOffRightLedge, true);
   assert.ok(Number(state.positionY) < 0);
   assert.ok(Number(state.velocityY) < 0);
+  assert.equal(state.jumpsUsed, 1);
+});
+
+test('walking off a ledge leaves one aerial jump available', () => {
+  let state = {
+    ...createInitialTrainingMovementState(),
+    positionX: worldUnits(Number(TRAINING_STAGE_HALF_WIDTH) + 1),
+  };
+  state = stepTrainingMovement(state, analog(0), DEFAULT_CONTROLLER_SETTINGS);
+  assert.equal(state.isGrounded, false);
+  assert.equal(state.jumpsUsed, 1);
+
+  state = stepTrainingMovement(state, digital(0, false, true), DEFAULT_CONTROLLER_SETTINGS);
+  assert.equal(state.jumpsUsed, 2);
+  assert.ok(Number(state.velocityY) > 0);
 });
 
 test('normal falling accelerates up to the supplied fall-speed cap', () => {
@@ -171,6 +192,105 @@ test('down input does not fast-fall while the fighter is supported', () => {
   assert.equal(state.isGrounded, true);
   assert.equal(state.isFastFalling, false);
   assert.equal(Number(state.velocityY), 0);
+});
+
+test('releasing jump during the three-frame squat produces Captain Falcon’s short hop', () => {
+  let state = createInitialTrainingMovementState();
+  state = stepTrainingMovement(state, digital(0, false, true), DEFAULT_CONTROLLER_SETTINGS);
+  assert.equal(state.isGrounded, true);
+  assert.equal(state.jumpSquatFramesRemaining, 3);
+
+  for (let frame = 0; frame < CAPTAIN_FALCON_MOVEMENT.jumpSquatFrames; frame += 1) {
+    state = stepTrainingMovement(state, digital(0), DEFAULT_CONTROLLER_SETTINGS);
+  }
+
+  assert.equal(state.isGrounded, false);
+  assert.equal(state.jumpsUsed, 1);
+  assert.equal(state.jumpInitialFramesRemaining, 0);
+
+  let peakHeight = Number(state.positionY);
+  for (let frame = 0; frame < 70; frame += 1) {
+    state = stepTrainingMovement(state, digital(0), DEFAULT_CONTROLLER_SETTINGS);
+    peakHeight = Math.max(peakHeight, Number(state.positionY));
+    if (state.isGrounded) break;
+  }
+  assert.ok(Math.abs(peakHeight - Number(CAPTAIN_FALCON_MOVEMENT.shortHopHeight)) < 1e-9);
+});
+
+test('holding jump through the squat reaches the full-hop initial height and peak', () => {
+  let state = createInitialTrainingMovementState();
+  state = stepTrainingMovement(state, digital(0, false, true), DEFAULT_CONTROLLER_SETTINGS);
+  for (let frame = 0; frame < CAPTAIN_FALCON_MOVEMENT.jumpSquatFrames; frame += 1) {
+    state = stepTrainingMovement(state, digital(0, false, true), DEFAULT_CONTROLLER_SETTINGS);
+  }
+
+  assert.equal(state.isGrounded, false);
+  assert.equal(state.jumpsUsed, 1);
+  assert.equal(state.jumpInitialFramesRemaining, CAPTAIN_FALCON_MOVEMENT.jumpInitialHeightFrames);
+
+  for (let frame = 0; frame < CAPTAIN_FALCON_MOVEMENT.jumpInitialHeightFrames; frame += 1) {
+    state = stepTrainingMovement(state, digital(0), DEFAULT_CONTROLLER_SETTINGS);
+  }
+  assert.ok(Math.abs(Number(state.positionY) - Number(CAPTAIN_FALCON_MOVEMENT.jumpInitialHeight)) < 1e-9);
+  assert.equal(state.jumpInitialFramesRemaining, 0);
+
+  let peakHeight = Number(state.positionY);
+  for (let frame = 0; frame < 70; frame += 1) {
+    state = stepTrainingMovement(state, digital(0), DEFAULT_CONTROLLER_SETTINGS);
+    peakHeight = Math.max(peakHeight, Number(state.positionY));
+    if (state.isGrounded) break;
+  }
+  assert.ok(Math.abs(peakHeight - Number(CAPTAIN_FALCON_MOVEMENT.fullHopHeight)) < 1e-9);
+});
+
+test('one midair jump resets vertical speed, cannot retrigger while held, and resets on landing', () => {
+  let state = createInitialTrainingMovementState();
+  state = stepTrainingMovement(state, digital(0, false, true), DEFAULT_CONTROLLER_SETTINGS);
+  for (let frame = 0; frame < CAPTAIN_FALCON_MOVEMENT.jumpSquatFrames; frame += 1) {
+    state = stepTrainingMovement(state, digital(0, false, true), DEFAULT_CONTROLLER_SETTINGS);
+  }
+  for (let frame = 0; frame < CAPTAIN_FALCON_MOVEMENT.jumpInitialHeightFrames; frame += 1) {
+    state = stepTrainingMovement(state, digital(0), DEFAULT_CONTROLLER_SETTINGS);
+  }
+
+  state = stepTrainingMovement(state, digital(0, false, true), DEFAULT_CONTROLLER_SETTINGS);
+  assert.equal(state.jumpsUsed, 2);
+  assert.ok(Number(state.velocityY) > 0);
+  const airJumpVelocity = Number(state.velocityY);
+
+  state = stepTrainingMovement(state, digital(0, false, true), DEFAULT_CONTROLLER_SETTINGS);
+  assert.equal(state.jumpsUsed, 2);
+  assert.ok(Number(state.velocityY) < airJumpVelocity);
+
+  for (let frame = 0; frame < 120 && !state.isGrounded; frame += 1) {
+    state = stepTrainingMovement(state, digital(0), DEFAULT_CONTROLLER_SETTINGS);
+  }
+  assert.equal(state.isGrounded, true);
+  assert.equal(state.jumpsUsed, 0);
+});
+
+test('the midair jump reaches its full supplied height above its starting altitude', () => {
+  let state = createInitialTrainingMovementState();
+  state = stepTrainingMovement(state, digital(0, false, true), DEFAULT_CONTROLLER_SETTINGS);
+  for (let frame = 0; frame < CAPTAIN_FALCON_MOVEMENT.jumpSquatFrames; frame += 1) {
+    state = stepTrainingMovement(state, digital(0, false, true), DEFAULT_CONTROLLER_SETTINGS);
+  }
+  for (let frame = 0; frame < CAPTAIN_FALCON_MOVEMENT.jumpInitialHeightFrames; frame += 1) {
+    state = stepTrainingMovement(state, digital(0), DEFAULT_CONTROLLER_SETTINGS);
+  }
+
+  const airJumpStart = Number(state.positionY);
+  state = stepTrainingMovement(state, digital(0, false, true), DEFAULT_CONTROLLER_SETTINGS);
+  let peakHeight = Number(state.positionY);
+  for (let frame = 0; frame < 70; frame += 1) {
+    state = stepTrainingMovement(state, digital(0), DEFAULT_CONTROLLER_SETTINGS);
+    peakHeight = Math.max(peakHeight, Number(state.positionY));
+    if (state.isGrounded) break;
+  }
+
+  assert.ok(
+    Math.abs(peakHeight - airJumpStart - Number(CAPTAIN_FALCON_MOVEMENT.airJumpHeight)) < 1e-9,
+  );
 });
 
 test('crossing any edge of the blastzone respawns the fighter on the platform', () => {
@@ -239,6 +359,16 @@ test('Captain Falcon movement values match the supplied Ultimate stats', () => {
   assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.baseAcceleration), 0.11);
   assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.additionalAcceleration), 0.066);
   assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.maxAcceleration), 0.176);
+});
+
+test('Captain Falcon jump data matches the supplied Ultimate heights', () => {
+  assert.equal(CAPTAIN_FALCON_MOVEMENT.jumpSquatFrames, 3);
+  assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.fullHopHeight), 37.31);
+  assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.jumpInitialHeight), 20.5205);
+  assert.equal(CAPTAIN_FALCON_MOVEMENT.jumpInitialHeightFrames, 4);
+  assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.shortHopHeight), 17.98);
+  assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.airJumpHeight), 37.31);
+  assert.equal(CAPTAIN_FALCON_MOVEMENT.maxAirJumps, 1);
 });
 
 test('analog stick input preserves push magnitude after deadzone rescaling', () => {
@@ -359,7 +489,107 @@ test('sensitivity changes the fast-flick window and stick jump emits input only 
     { stickJumpEnabled: false },
   );
   assert.equal(enabled.stickJumpAction, true);
+  assert.equal(enabled.jumpHeld, true);
   assert.equal(disabled.stickJumpAction, false);
+  assert.equal(disabled.jumpHeld, false);
+
+  const buttonStillJumpsWithStickJumpDisabled = readTrainingControlInput(
+    {},
+    new Set(),
+    [createGamepad([0, -0.8], [3])],
+    { stickJumpEnabled: false },
+  );
+  assert.equal(buttonStillJumpsWithStickJumpDisabled.jumpHeld, true);
+
+  const stickJumpBeginsJumpSquat = stepTrainingMovement(
+    createInitialTrainingMovementState(),
+    enabled,
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.equal(stickJumpBeginsJumpSquat.jumpSquatFramesRemaining, 3);
+
+  const disabledStickDoesNotStartJump = stepTrainingMovement(
+    createInitialTrainingMovementState(),
+    disabled,
+    { ...DEFAULT_CONTROLLER_SETTINGS, stickJumpEnabled: false },
+  );
+  assert.equal(disabledStickDoesNotStartJump.jumpSquatFramesRemaining, 0);
+});
+
+test('configured keyboard, gamepad, and rebound jump buttons are read as held input', () => {
+  const keyboardJump = readTrainingControlInput(
+    DEFAULT_KEYBINDS_KEYBOARD_P1,
+    new Set(['KeyJ']),
+    [],
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.equal(keyboardJump.jumpHeld, true);
+
+  const alternateKeyboardJump = readTrainingControlInput(
+    DEFAULT_KEYBINDS_KEYBOARD_P1,
+    new Set(['Space']),
+    [],
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.equal(alternateKeyboardJump.jumpHeld, true);
+
+  const gamepadJump = readTrainingControlInput(
+    {},
+    new Set(),
+    [createGamepad([0, 0], [3])],
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.equal(gamepadJump.jumpHeld, true);
+
+  const gamepadAlternateJump = readTrainingControlInput(
+    {},
+    new Set(),
+    [createGamepad([0, 0], [2])],
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.equal(gamepadAlternateJump.jumpHeld, true);
+
+  const reboundKeyboardJump = readTrainingControlInput(
+    { 'keyboard:jump': { device: 'keyboard', keyCode: 'KeyQ' } },
+    new Set(['KeyQ']),
+    [],
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.equal(reboundKeyboardJump.jumpHeld, true);
+
+  const reboundGamepadJump = readTrainingControlInput(
+    { 'gamepad:jump': { device: 'gamepad', buttonIndex: 7 } },
+    new Set(),
+    [createGamepad([0, 0], [7])],
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.equal(reboundGamepadJump.jumpHeld, true);
+});
+
+test('a keyboard jump tap between fixed updates is queued and still produces a short hop', () => {
+  const tap = readTrainingControlInput(
+    DEFAULT_KEYBINDS_KEYBOARD_P1,
+    new Set(),
+    [],
+    DEFAULT_CONTROLLER_SETTINGS,
+    new Set(['Space']),
+  );
+  assert.equal(tap.jumpPressed, true);
+  assert.equal(tap.jumpHeld, false);
+
+  let state = stepTrainingMovement(
+    createInitialTrainingMovementState(),
+    tap,
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.equal(state.jumpSquatFramesRemaining, 3);
+
+  for (let frame = 0; frame < CAPTAIN_FALCON_MOVEMENT.jumpSquatFrames; frame += 1) {
+    state = stepTrainingMovement(state, digital(0), DEFAULT_CONTROLLER_SETTINGS);
+  }
+  assert.equal(state.isGrounded, false);
+  assert.equal(state.jumpsUsed, 1);
+  assert.equal(state.jumpInitialFramesRemaining, 0);
 });
 
 test('controller options persist and older saved players receive safe defaults', () => {

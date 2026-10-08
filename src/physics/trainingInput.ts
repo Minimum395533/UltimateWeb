@@ -25,6 +25,8 @@ export interface TrainingControlInput {
   isDigital: boolean;
   /** Hold down while airborne to reach the character's fast-fall speed. */
   downHeld: boolean;
+  /** One-frame keyboard press edge, including taps shorter than a simulation frame. */
+  jumpPressed: boolean;
   /** Held state from either configured jump button or enabled stick jump. */
   jumpHeld: boolean;
   /** Enabled up-stick input, exposed separately for the training readout. */
@@ -108,6 +110,7 @@ export function readTrainingControlInput(
   pressedKeys: ReadonlySet<string>,
   gamepads: readonly (GamepadSnapshot | null)[],
   controllerSettings: unknown,
+  newlyPressedKeys: ReadonlySet<string> = new Set(),
 ): TrainingControlInput {
   const gamepad = gamepads.find((pad): pad is GamepadSnapshot => pad !== null) ?? null;
   const settings = normalizeControllerSettings(controllerSettings);
@@ -118,8 +121,10 @@ export function readTrainingControlInput(
   const rightGamepad = readBinding(getBinding(bindings, 'gamepad', 'right'), pressedKeys, gamepad);
   const downKeyboard = readBinding(getBinding(bindings, 'keyboard', 'down'), pressedKeys, null);
   const downGamepad = readBinding(getBinding(bindings, 'gamepad', 'down'), pressedKeys, gamepad);
-  const jumpKeyboard = readBinding(getBinding(bindings, 'keyboard', 'jump'), pressedKeys, null);
-  const jumpAltKeyboard = readBinding(getBinding(bindings, 'keyboard', 'jumpAlt'), pressedKeys, null);
+  const jumpKeyboardBinding = getBinding(bindings, 'keyboard', 'jump');
+  const jumpAltKeyboardBinding = getBinding(bindings, 'keyboard', 'jumpAlt');
+  const jumpKeyboard = readBinding(jumpKeyboardBinding, pressedKeys, null);
+  const jumpAltKeyboard = readBinding(jumpAltKeyboardBinding, pressedKeys, null);
   const jumpGamepad = readBinding(getBinding(bindings, 'gamepad', 'jump'), pressedKeys, gamepad);
   const jumpAltGamepad = readBinding(getBinding(bindings, 'gamepad', 'jumpAlt'), pressedKeys, gamepad);
 
@@ -136,6 +141,10 @@ export function readTrainingControlInput(
     || gamepadDownHeld
     || buttonPressed(gamepad, 13);
   const stickJumpAction = shouldTriggerStickJump(gamepad?.axes[1] ?? 0, settings);
+  const jumpPressed = Boolean(
+    (jumpKeyboardBinding.keyCode && newlyPressedKeys.has(jumpKeyboardBinding.keyCode))
+    || (jumpAltKeyboardBinding.keyCode && newlyPressedKeys.has(jumpAltKeyboardBinding.keyCode)),
+  );
   const jumpHeld = jumpKeyboard.value > 0
     || jumpAltKeyboard.value > 0
     || jumpGamepad.value > 0
@@ -159,6 +168,7 @@ export function readTrainingControlInput(
     horizontal,
     isDigital,
     downHeld,
+    jumpPressed,
     jumpHeld,
     stickJumpAction,
   };

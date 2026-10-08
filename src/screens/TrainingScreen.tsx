@@ -28,6 +28,7 @@ const TrainingScreen: React.FC = () => {
   const [movement, setMovement] = useState(createInitialTrainingMovementState);
   const movementRef = useRef<TrainingMovementState>(createInitialTrainingMovementState());
   const pressedKeys = useRef(new Set<string>());
+  const newlyPressedKeys = useRef(new Set<string>());
   const bindingsRef = useRef<PlayerKeybinds>(DEFAULT_KEYBINDS_KEYBOARD_P1);
   const controllerSettingsRef = useRef(normalizeControllerSettings(undefined));
   const controllerSettings = useMemo(
@@ -42,6 +43,9 @@ const TrainingScreen: React.FC = () => {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (!pressedKeys.current.has(event.code)) {
+        newlyPressedKeys.current.add(event.code);
+      }
       pressedKeys.current.add(event.code);
       if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(event.code)) {
         event.preventDefault();
@@ -50,7 +54,10 @@ const TrainingScreen: React.FC = () => {
     const handleKeyUp = (event: KeyboardEvent) => {
       pressedKeys.current.delete(event.code);
     };
-    const handleBlur = () => pressedKeys.current.clear();
+    const handleBlur = () => {
+      pressedKeys.current.clear();
+      newlyPressedKeys.current.clear();
+    };
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
@@ -86,12 +93,14 @@ const TrainingScreen: React.FC = () => {
             pressedKeys.current,
             gamepads,
             controllerSettingsRef.current,
+            newlyPressedKeys.current,
           );
           movementRef.current = stepTrainingMovement(
             movementRef.current,
             input,
             controllerSettingsRef.current,
           );
+          newlyPressedKeys.current.clear();
           accumulatedMilliseconds -= TRAINING_STEP_MILLISECONDS;
           steps += 1;
         }
@@ -153,7 +162,10 @@ const TrainingScreen: React.FC = () => {
       ? `WALK · ${movement.walkBand}`
       : movement.mode.replace('-', ' ').toUpperCase();
   const settingsLabel = controllerSettings.stickJumpEnabled ? 'ON' : 'OFF';
-  const jumpsRemaining = Math.max(0, 2 - movement.jumpsUsed);
+  const jumpsRemaining = Math.max(
+    0,
+    1 + CAPTAIN_FALCON_MOVEMENT.maxAirJumps - movement.jumpsUsed,
+  );
 
   return (
     <main className="training-screen">
