@@ -1,0 +1,69 @@
+A jump is an action that moves a character from the ground into the air. All characters can also jump a second time in midair, providing they are not attacking, air dodging, helpless, in hitstun, or have used it already. It is performed by pressing up on the control stick (D-pad on a horizontal Wii Remote), which can be toggled with the Tap jump option in the controls menu in Brawl onward, or by pressing a certain button, which is by default:
+
+the C buttons on the Nintendo 64 controller or Wii Remote with Nunchuk
+the X or Y button with the GameCube controller, Classic Controller, 3DS, Wii U Pro Controller/GamePad, Switch Pro Controller, and dual Joy-Cons
+the top and left buttons on a horizontal Joy-Con, which are the positions of Y and B on the right Joy-Con.
+A few characters can jump more than once in the air:
+
+Kirby, Meta Knight, and Jigglypuff can do a midair jump five times.
+King Dedede can do a midair jump four times.
+Pit and Dark Pit can do a midair jump three times.
+Charizard, Ridley, and Banjo & Kazooie can do a midair jump twice.
+Sephiroth can do a midair jump twice when Winged Form is active.
+In Super Smash Bros. Ultimate, equipping a spirit with the "Additional Midair Jump" effect allows any character to do a midair jump an additional time.
+There is a short delay between the jump button being pressed and the on-screen character actually jumping, during which the onscreen character will enter a crouching portion of their jumping animation. If the control stick or jump button is released during this time, then the character short hops. If the control stick is tilted backwards during this time, the character will jump backwards with a different animation than a regular jump. If the standard attack button is pressed during this time, then the character uses their up smash (but only if the jump was executed with the Control Stick). Because characters can jump while shielding (excluding Yoshi in Super Smash Bros. Melee and Super Smash Bros. Brawl, due to his unique shield), this allows usage of up smashes (and up special moves as well) without having to drop the shield. This also makes it difficult for a player using the Wii Remote-only control scheme to perform up tilts. Inputting an aerial on the first frame that a character is airborne will cause the jump to be slightly lower, because gravity applies to the first frame of an aerial but not to the first frame of a jump.
+
+Brawl added a jumping mechanic known as footstools. This allows characters to jump off the heads of other characters. This can be done even when all midair jumps have already been used.
+
+In Ultimate, a character will emit a subtle wispy trail if they have no extra jumps available.
+
+
+Contents
+1	Types of jumps
+1.1	Softhop
+2	Jump squat
+2.1	Jump squats in Super Smash Bros.
+2.2	Jump squats in Super Smash Bros. Melee
+2.3	Jump squats in Super Smash Bros. Brawl
+2.4	Jump squats in Super Smash Bros. 4
+2.5	Jump squats in Super Smash Bros. Ultimate
+3	Jump height ranking
+3.1	Super Smash Bros.
+3.2	Super Smash Bros. Melee
+3.3	Super Smash Bros. Brawl
+3.3.1	Notes
+3.4	Super Smash Bros. 4
+3.5	Super Smash Bros. Ultimate
+4	Super Smash Bros. for Wii U digital manual description
+5	Gallery
+6	References
+7	See also
+Types of jumps
+All characters can perform several different types of jumps. The most basic type is a standing jump, which is a jump without any other inputs. There are also more complicated jumps that involve other inputs. One of these is the walk jump, which involves jumping while walking or dashing. Another one is the backward jump, which involves the player turning around, but jumping before the fighter can. All jumps have 2 performable variants. The first and most common type is the full hop, which involves the player holding the jump command so the fighter can jump to maximum height. The second type is the short hop, which involves the player quickly tapping the jump command so the fighter will only perform a slight jump. There are also 2 different methods of performing these jumps. The first way is by pressing the jump button. The second way is to press up on the control stick/D-pad. This totals to 12 different ways to jump, with all possible combinations of each having different heights.
+
+Softhop
+Softhopping is a technique introduced in Brawl in which a character can perform their grounded full hop within a few frames of running off any platform's edges. With this, the initial jump squat frames of a jump can be bypassed by inputting a jump within 4 frames of running off of an edge.
+
+In Brawl and Smash 4, aside from removing the additional lag from a jump squat, softhops have no special properties when compared to full hops, however they allow the player to initiate the jump from slightly beyond the platform. The potential benefits of performing the technique depends on the fighter, as prior to Ultimate the duration of jump squats vary depending on the fighter.
+
+In Ultimate, softhopping has an additional effect on full hops. Ultimate introduced a mechanic in which the first few frames of a fighter's full hop are sped up, causing them to reach their maximum jump height sooner. Performing a softhop disables this mechanic, causing full hops to behave the same way as midair jumps and full hops prior to Ultimate. This results in fighters taking longer to reach their maximum jump height, but allows them to cover more horizontal distance before beginning to fall, and potentially allows aerials to hit which the user would have otherwise been too high up to connect with by the time the first hitbox comes out, similarly to instant double jumping. Forcing the user to perform a full hop when performing the technique also removes the risk of accidentally performing a short hop, guaranteeing the full damage output of aerials rather than the reduced 0.85× damage from short hops.
+
+Jump squat
+A jump squat or windup refers to the length of time between the input of the jump and the moment the character leaves the ground. Each character has a different window of time where they crouch before they jump. Characters with faster jump squats will leave the ground earlier, and can transition between their air and ground games easier; however, depending on the control scheme, the player may find it more technically demanding to perform short hops or up smashes. In Melee, characters with faster jump squats can also perform wavedashes quicker.
+
+Jump squats in Super Smash Bros. Ultimate
+Every character has a 3-frame jump squat, with the exception of Kazuya (who has a 7-frame jump squat, though the value is defined as 6 in fighter_param.prc) and Giga Bowser (who has a 15-frame jump squat).
+
+Below are characters ranked by the height of their first jump. Jump force is measured in units per frame.
+
+Note that there are two methods to determine jump height, depending on the game.
+
+In Smash 64, Melee, and Brawl, the game uses jump force, or the speed at which the character leaves the ground. In Smash 64, jump force is calculated at the time of the jump. In Melee and Brawl it is encoded. The resulting jump height is dependent on the character's gravity.
+In Smash 4 and Ultimate, the game encodes jump height, and works backwards using gravity to figure out the correct force to use. This allows more natural behaviour to modifications of jump height from equipment or special moves such as Monado Arts.
+However, for multiple aerial jumps, the game encodes jump force (except for Charizard and Sephiroth).
+In Ultimate, the game also encodes jump initial height, or the height that a character will reach in the first 4 frames of a full hop. After the first 4 frames, the normal method for Smash 4 will be used with the height being reduced by the initial height. This results in characters moving significantly faster during the beginning of their jump and reaching their peak a few frames sooner. This has no affect on short hops or aerial jumps.
+
+The mechanic of "jump initial height" was introduced in Ultimate. This value is the height that a character will reach within the first 4 frames of their full hop (doesn't affect short hops or air jumps). It results in characters being able to gain more height in less time compared to Smash 4, often having 1.5-3× the starting speed and reaching the same heights a few frames faster. For most characters the initial height is 0.55× their full hop height, the exceptions being the Ice Climbers at 0.35×, Simon and Richter at 0.4×, and Pyra and Mythra at 0.56×.
+
+Captain Falcon (SSBU) Captain Falcon	/37.31/	20.5205	/17.98	/37.31/	74.62 for 
+Character	/Full Hop	/Initial Height	/Short Hop/	Air Jump/	Combined Jump Height
