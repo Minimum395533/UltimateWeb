@@ -143,12 +143,17 @@ const TrainingScreen: React.FC = () => {
   const fighterHeightPercent = worldToMapY(Number(movement.positionY));
   const speed = Math.abs(Number(movement.velocityX));
   const verticalSpeed = Math.abs(Number(movement.velocityY));
-  const modeLabel = !movement.isGrounded
-    ? movement.isFastFalling ? 'FAST FALL' : 'FALLING'
+  const modeLabel = movement.jumpSquatFramesRemaining > 0
+    ? `JUMP SQUAT · ${movement.jumpSquatFramesRemaining}`
+    : !movement.isGrounded
+      ? Number(movement.velocityY) > 0
+        ? 'RISING'
+        : movement.isFastFalling ? 'FAST FALL' : 'FALLING'
     : movement.mode === 'walk' && movement.walkBand > 0
       ? `WALK · ${movement.walkBand}`
       : movement.mode.replace('-', ' ').toUpperCase();
   const settingsLabel = controllerSettings.stickJumpEnabled ? 'ON' : 'OFF';
+  const jumpsRemaining = Math.max(0, 2 - movement.jumpsUsed);
 
   return (
     <main className="training-screen">
@@ -260,16 +265,22 @@ const TrainingScreen: React.FC = () => {
             <span>STICK JUMP</span>
             <strong>{movement.stickJumpAction ? 'JUMP INPUT' : settingsLabel}</strong>
           </div>
+          <div>
+            <span>JUMPS LEFT</span>
+            <strong>{jumpsRemaining}</strong>
+          </div>
         </div>
 
         <div className="training-instructions">
           <p><strong>Move:</strong> A / D, your rebinds, or the gamepad D-pad or left stick.</p>
           <p><strong>Analog:</strong> light tilt walks at a scaled speed; a quick full flick dashes; holding full tilt runs.</p>
+          <p><strong>Jump:</strong> J / Space, your jump rebinds, or enabled Stick Jump. Hold through the 3-frame squat for a full hop; release during it for a short hop. Press jump again in the air for Falcon’s midair jump.</p>
           <p><strong>Fall:</strong> walk or run off either ledge. Hold your down binding (S by default) or tilt the stick down while falling to fast-fall.</p>
           <p><strong>Omega platform:</strong> {Number(TRAINING_STAGE_WIDTH)} u wide, with open ledges at ±{Number(TRAINING_STAGE_HALF_WIDTH)} u.</p>
           <p><strong>Captain Falcon:</strong> gravity {Number(CAPTAIN_FALCON_MOVEMENT.gravity).toFixed(2)} u/frame² · walk {Number(CAPTAIN_FALCON_MOVEMENT.walkSpeed).toFixed(3)} · initial dash {Number(CAPTAIN_FALCON_MOVEMENT.initialDashSpeed).toFixed(3)} · run {Number(CAPTAIN_FALCON_MOVEMENT.runSpeed).toFixed(3)} · fall {Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed).toFixed(3)} · fast fall {Number(CAPTAIN_FALCON_MOVEMENT.fastFallSpeed).toFixed(3)} u/frame.</p>
+          <p><strong>Jump heights:</strong> full hop {Number(CAPTAIN_FALCON_MOVEMENT.fullHopHeight)} u · first-four-frame height {Number(CAPTAIN_FALCON_MOVEMENT.jumpInitialHeight)} u · short hop {Number(CAPTAIN_FALCON_MOVEMENT.shortHopHeight)} u · one midair jump {Number(CAPTAIN_FALCON_MOVEMENT.airJumpHeight)} u.</p>
           <p><strong>Diagram-scaled bounds:</strong> blastzone x ±240, y −140 to +179 u · camera x ±180, y −60 to +130 u. These bounds are approximate and scaled from the supplied image.</p>
-          <p className="training-note">Stick Jump only reports its input here. Jump physics and attacks are not implemented.</p>
+          <p className="training-note">A jump off the platform keeps one midair jump available. Landing restores both jumps; attacks and other combat actions are not implemented.</p>
         </div>
       </section>
     </main>

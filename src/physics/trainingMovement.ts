@@ -41,6 +41,13 @@ export const CAPTAIN_FALCON_MOVEMENT = {
   fastFallSpeed: unitsPerFrame(2.984),
   regularDashAccelerationDelayFrames: 1,
   turnaroundDashAccelerationDelayFrames: 3,
+  jumpSquatFrames: 3,
+  fullHopHeight: worldUnits(37.31),
+  jumpInitialHeight: worldUnits(20.5205),
+  jumpInitialHeightFrames: 4,
+  shortHopHeight: worldUnits(17.98),
+  airJumpHeight: worldUnits(37.31),
+  maxAirJumps: 1,
 } as const;
 
 export type MovementMode =
@@ -65,6 +72,11 @@ export interface TrainingMovementState {
   framesInDirection: number;
   framesInPhase: number;
   walkBand: WalkBand;
+  jumpInputHeld: boolean;
+  jumpSquatFramesRemaining: number;
+  shortHopRequested: boolean;
+  jumpsUsed: number;
+  jumpInitialFramesRemaining: number;
   stickJumpAction: boolean;
 }
 
@@ -103,6 +115,11 @@ export function createInitialTrainingMovementState(): TrainingMovementState {
     framesInDirection: 0,
     framesInPhase: 0,
     walkBand: 0,
+    jumpInputHeld: false,
+    jumpSquatFramesRemaining: 0,
+    shortHopRequested: false,
+    jumpsUsed: 0,
+    jumpInitialFramesRemaining: 0,
     stickJumpAction: false,
   };
 }
@@ -134,55 +151,202 @@ function isOutsideTrainingBlastzone(positionX: WorldUnit, positionY: WorldUnit):
     || Number(positionY) > Number(TRAINING_BLASTZONE_BOUNDS.top);
 }
 
+function launchVelocityForHeight(height: number, gravity: number): number {
+  if (!Number.isFinite(height) || height <= 0 || !Number.isFinite(gravity) || gravity <= 0) {
+    throw new RangeError('Jump height and gravity must be finite positive values');
+  }
+
+  for (let frames = 1; frames <= 2000; frames += 1) {
+    const velocity =
+      (height + gravity * frames * (frames - 1) / 2) / frames;
+    if (velocity > gravity * (frames - 1) && velocity <= gravity * frames) {
+      return velocity;
+    }
+  }
+
+  throw new RangeError('Jump height exceeds the supported frame range');
+}
+
+const FULL_HOP_INITIAL_PHASE = (() => {
+  const initialHeight = Number(CAPTAIN_FALCON_MOVEMENT.jumpInitialHeight);
+  const remainingHeight =
+    Number(CAPTAIN_FALCON_MOVEMENT.fullHopHeight) - initialHeight;
+  const frames = CAPTAIN_FALCON_MOVEMENT.jumpInitialHeightFrames;
+  const endVelocity = launchVelocityForHeight(
+    remainingHeight,
+    Number(CAPTAIN_FALCON_MOVEMENT.gravity),
+  );
+  const deceleration =
+    (2 * (initialHeight - frames * endVelocity)) / (frames * (frames + 1));
+
+  if (deceleration <= 0) {
+    throw new RangeError('Initial jump height must produce a rising launch phase');
+  }
+
+  return {
+    launchVelocity: endVelocity + frames * deceleration,
+    deceleration,
+  };
+})();
+
 function advanceVerticalMovement(
   state: TrainingMovementState,
-  downHeld: boolean,
+  input: TrainingControlInput,
 ): TrainingMovementState {
+  const jumpHeld = Boolean(input.jumpHeld || input.stickJumpAction);
+  const jumpPressed = jumpHeld && !state.jumpInputHeld;
+  const inputState = {
+    ...state,
+    jumpInputHeld: jumpHeld,
+    stickJumpAction: input.stickJumpAction,
+  };
+  const respawn = () => ({
+    ...createInitialTrainingMovementState(),
+    jumpInputHeld: jumpHeld,
+    stickJumpAction: input.stickJumpAction,
+  });
+
   if (isOutsideTrainingBlastzone(state.positionX, state.positionY)) {
-    return createInitialTrainingMovementState();
+    return respawn();
   }
 
   const supported = Math.abs(Number(state.positionX)) <= Number(TRAINING_STAGE_HALF_WIDTH);
-  if (state.isGrounded && supported) {
-    return {
-      ...state,
+  if (state.jumpSquatFramesRemaining > 0) {
+    const shortHopRequested = state.shortHopRequested || !jumpHeld;
+    const jumpSquatFramesRemaining = state.jumpSquatFramesRemaining - 1;
+    const squatState = {
+      ...inputState,
+      jumpSquatFramesRemaining,
+      shortHopRequested,
       positionY: worldUnits(0),
       velocityY: unitsPerFrame(0),
       isGrounded: true,
       isFastFalling: false,
     };
+
+    if (jumpSquatFramesRemaining === 0) {
+      const height = shortHopRequested
+        ? Number(CAPTAIN_FALCON_MOVEMENT.shortHopHeight)
+        : Number(CAPTAIN_FALCON_MOVEMENT.fullHopHeight);
+      const useInitialHeight = !shortHopRequested;
+      const launchVelocity = useInitialHeight
+        ? FULL_HOP_INITIAL_PHASE.launchVelocity
+        : launchVelocityForHeight(
+          height,
+          Number(CAPTAIN_FALCON_MOVEMENT.gravity),
+        );
+      return {
+        ...squatState,
+        velocityY: unitsPerFrame(launchVelocity),
+        isGrounded: false,
+        jumpsUsed: 1,
+        shortHopRequested: false,
+        jumpInitialFramesRemaining: useInitialHeight
+          ? CAPTAIN_FALCON_MOVEMENT.jumpInitialHeightFrames
+          : 0,
+      };
+    }
+
+    return squatState;
   }
 
-  const fallSpeed = downHeld
-    ? Number(CAPTAIN_FALCON_MOVEMENT.fastFallSpeed)
-    : Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed);
-  const velocityY = Math.max(
-    -fallSpeed,
-    Number(state.velocityY) - Number(CAPTAIN_FALCON_MOVEMENT.gravity),
-  );
-  const positionY = Number(state.positionY) + velocityY;
-
-  if (!state.isGrounded && Number(state.positionY) > 0 && positionY <= 0 && supported) {
+  if (jumpPressed && state.isGrounded && supported) {
     return {
-      ...state,
+      ...inputState,
       positionY: worldUnits(0),
       velocityY: unitsPerFrame(0),
       isGrounded: true,
       isFastFalling: false,
+      jumpSquatFramesRemaining: CAPTAIN_FALCON_MOVEMENT.jumpSquatFrames,
+      shortHopRequested: false,
+      jumpsUsed: 0,
+      jumpInitialFramesRemaining: 0,
+    };
+  }
+
+  if (state.isGrounded && supported) {
+    return {
+      ...inputState,
+      positionY: worldUnits(0),
+      velocityY: unitsPerFrame(0),
+      isGrounded: true,
+      isFastFalling: false,
+      jumpSquatFramesRemaining: 0,
+      shortHopRequested: false,
+      jumpsUsed: 0,
+      jumpInitialFramesRemaining: 0,
+    };
+  }
+
+  let airborneState = inputState;
+  if (state.isGrounded || airborneState.jumpsUsed === 0) {
+    airborneState = {
+      ...airborneState,
+      isGrounded: false,
+      jumpsUsed: Math.max(1, airborneState.jumpsUsed),
+    };
+  }
+
+  if (jumpPressed && airborneState.jumpsUsed === 1) {
+    return {
+      ...airborneState,
+      velocityY: unitsPerFrame(launchVelocityForHeight(
+        Number(CAPTAIN_FALCON_MOVEMENT.airJumpHeight),
+        Number(CAPTAIN_FALCON_MOVEMENT.gravity),
+      )),
+      isGrounded: false,
+      isFastFalling: false,
+      jumpsUsed: 2,
+      jumpSquatFramesRemaining: 0,
+      shortHopRequested: false,
+      jumpInitialFramesRemaining: 0,
+    };
+  }
+
+  let velocityY: number;
+  let positionY: number;
+  let jumpInitialFramesRemaining = airborneState.jumpInitialFramesRemaining;
+  if (jumpInitialFramesRemaining > 0) {
+    velocityY =
+      Number(airborneState.velocityY) - FULL_HOP_INITIAL_PHASE.deceleration;
+    positionY = Number(airborneState.positionY) + Number(airborneState.velocityY);
+    jumpInitialFramesRemaining -= 1;
+  } else {
+    const fastFalling = input.downHeld && Number(airborneState.velocityY) <= 0;
+    const fallSpeed = fastFalling
+      ? Number(CAPTAIN_FALCON_MOVEMENT.fastFallSpeed)
+      : Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed);
+    velocityY = Math.max(
+      -fallSpeed,
+      Number(airborneState.velocityY) - Number(CAPTAIN_FALCON_MOVEMENT.gravity),
+    );
+    positionY = Number(airborneState.positionY) + velocityY;
+  }
+
+  if (!airborneState.isGrounded && Number(airborneState.positionY) > 0 && positionY <= 0 && supported) {
+    return {
+      ...airborneState,
+      positionY: worldUnits(0),
+      velocityY: unitsPerFrame(0),
+      isGrounded: true,
+      isFastFalling: false,
+      jumpsUsed: 0,
+      jumpSquatFramesRemaining: 0,
+      shortHopRequested: false,
+      jumpInitialFramesRemaining: 0,
     };
   }
 
   const nextState = {
-    ...state,
+    ...airborneState,
     positionY: worldUnits(positionY),
     velocityY: unitsPerFrame(velocityY),
     isGrounded: false,
-    isFastFalling: downHeld,
+    isFastFalling: input.downHeld && velocityY < 0,
+    jumpInitialFramesRemaining,
   };
-  if (
-    isOutsideTrainingBlastzone(nextState.positionX, nextState.positionY)
-  ) {
-    return createInitialTrainingMovementState();
+  if (isOutsideTrainingBlastzone(nextState.positionX, nextState.positionY)) {
+    return respawn();
   }
 
   return nextState;
@@ -242,7 +406,7 @@ export function stepTrainingMovement(
       framesInPhase: 0,
       walkBand: 0,
       stickJumpAction: input.stickJumpAction,
-    }, input.downHeld);
+    }, input);
   }
 
   const directionChanged = direction !== state.inputDirection;
@@ -257,7 +421,7 @@ export function stepTrainingMovement(
   if (directionChanged && quickInput) {
     return advanceVerticalMovement(
       startDash(state, direction, turnaround, input, framesInDirection),
-      input.downHeld,
+      input,
     );
   }
 
@@ -296,7 +460,7 @@ export function stepTrainingMovement(
       framesInPhase,
       walkBand: 0,
       stickJumpAction: input.stickJumpAction,
-    }, input.downHeld);
+    }, input);
   }
 
   const walking = magnitude < FULL_TILT_THRESHOLD;
@@ -321,5 +485,5 @@ export function stepTrainingMovement(
     framesInPhase: 0,
     walkBand: walking ? walkBandForMagnitude(magnitude) : 0,
     stickJumpAction: input.stickJumpAction,
-  }, input.downHeld);
+  }, input);
 }

@@ -25,7 +25,9 @@ export interface TrainingControlInput {
   isDigital: boolean;
   /** Hold down while airborne to reach the character's fast-fall speed. */
   downHeld: boolean;
-  /** Input event only. Training mode does not yet simulate a jump. */
+  /** Held state from either configured jump button or enabled stick jump. */
+  jumpHeld: boolean;
+  /** Enabled up-stick input, exposed separately for the training readout. */
   stickJumpAction: boolean;
 }
 
@@ -54,7 +56,7 @@ export function applyAnalogDeadzone(
 function getBinding(
   bindings: PlayerKeybinds,
   device: InputBinding['device'],
-  input: 'left' | 'right' | 'down',
+  input: 'left' | 'right' | 'down' | 'jump' | 'jumpAlt',
 ): InputBinding {
   const scopedBinding = bindings[`${device}:${input}`];
   if (scopedBinding?.device === device) return scopedBinding;
@@ -116,6 +118,10 @@ export function readTrainingControlInput(
   const rightGamepad = readBinding(getBinding(bindings, 'gamepad', 'right'), pressedKeys, gamepad);
   const downKeyboard = readBinding(getBinding(bindings, 'keyboard', 'down'), pressedKeys, null);
   const downGamepad = readBinding(getBinding(bindings, 'gamepad', 'down'), pressedKeys, gamepad);
+  const jumpKeyboard = readBinding(getBinding(bindings, 'keyboard', 'jump'), pressedKeys, null);
+  const jumpAltKeyboard = readBinding(getBinding(bindings, 'keyboard', 'jumpAlt'), pressedKeys, null);
+  const jumpGamepad = readBinding(getBinding(bindings, 'gamepad', 'jump'), pressedKeys, gamepad);
+  const jumpAltGamepad = readBinding(getBinding(bindings, 'gamepad', 'jumpAlt'), pressedKeys, gamepad);
 
   const keyboardDirection = rightKeyboard.value - leftKeyboard.value;
   const gamepadButtonDirection =
@@ -129,6 +135,12 @@ export function readTrainingControlInput(
   const downHeld = downKeyboard.value > 0
     || gamepadDownHeld
     || buttonPressed(gamepad, 13);
+  const stickJumpAction = shouldTriggerStickJump(gamepad?.axes[1] ?? 0, settings);
+  const jumpHeld = jumpKeyboard.value > 0
+    || jumpAltKeyboard.value > 0
+    || jumpGamepad.value > 0
+    || jumpAltGamepad.value > 0
+    || stickJumpAction;
 
   let horizontal: number;
   let isDigital: boolean;
@@ -147,6 +159,7 @@ export function readTrainingControlInput(
     horizontal,
     isDigital,
     downHeld,
-    stickJumpAction: shouldTriggerStickJump(gamepad?.axes[1] ?? 0, settings),
+    jumpHeld,
+    stickJumpAction,
   };
 }
