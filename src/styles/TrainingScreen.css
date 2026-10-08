@@ -300,6 +300,11 @@
     white-space: nowrap;
   }
 
+  .training-bean {
+    width: 34px;
+    height: 80px;
+  }
+
   .training-content {
     padding: 16px;
   }

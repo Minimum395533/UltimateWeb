@@ -7,9 +7,15 @@ import {
 } from '../../src/physics/controllerSettings.ts';
 import {
   CAPTAIN_FALCON_MOVEMENT,
+  TRAINING_CAMERA_DEADZONE,
+  TRAINING_CAMERA_HALF_WIDTH,
+  TRAINING_RESPAWN_DEPTH,
+  TRAINING_STAGE_HALF_WIDTH,
+  TRAINING_STAGE_WIDTH,
   createInitialTrainingMovementState,
   stepTrainingMovement,
 } from '../../src/physics/trainingMovement.ts';
+import { worldUnits } from '../../src/physics/units.ts';
 import {
   applyAnalogDeadzone,
   readTrainingControlInput,
@@ -23,12 +29,12 @@ import {
   DEFAULT_KEYBINDS_KEYBOARD_P1,
 } from '../../src/types/index.ts';
 
-function analog(horizontal, stickJumpAction = false) {
-  return { horizontal, isDigital: false, stickJumpAction };
+function analog(horizontal, stickJumpAction = false, downHeld = false) {
+  return { horizontal, isDigital: false, stickJumpAction, downHeld };
 }
 
-function digital(horizontal) {
-  return { horizontal, isDigital: true, stickJumpAction: false };
+function digital(horizontal, downHeld = false) {
+  return { horizontal, isDigital: true, stickJumpAction: false, downHeld };
 }
 
 function createGamepad(axes = [0, 0], buttonIndexes = []) {
@@ -38,6 +44,126 @@ function createGamepad(axes = [0, 0], buttonIndexes = []) {
   }));
   return { axes, buttons };
 }
+
+test('the Omega training platform is 160 units long and exposes both ledges', () => {
+  assert.equal(Number(TRAINING_STAGE_WIDTH), 160);
+  assert.equal(Number(TRAINING_STAGE_HALF_WIDTH), 80);
+  assert.equal(Number(TRAINING_CAMERA_HALF_WIDTH), 100);
+  assert.equal(Number(TRAINING_CAMERA_DEADZONE), 40);
+});
+
+test('Captain Falcon normal and fast-fall caps match the supplied values', () => {
+  assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed), 1.865);
+  assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.fastFallSpeed), 2.984);
+  assert.equal(Number(TRAINING_RESPAWN_DEPTH), 50);
+});
+
+test('down input reads keyboard, analog stick, and D-pad fast-fall controls', () => {
+  const keyboardDown = readTrainingControlInput(
+    DEFAULT_KEYBINDS_KEYBOARD_P1,
+    new Set(['KeyS']),
+    [],
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.equal(keyboardDown.downHeld, true);
+
+  const stickDown = readTrainingControlInput(
+    {},
+    new Set(),
+    [createGamepad([0, 0.8])],
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.equal(stickDown.downHeld, true);
+
+  const stickDrift = readTrainingControlInput(
+    {},
+    new Set(),
+    [createGamepad([0, 0.45])],
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.equal(stickDrift.downHeld, false);
+
+  const dpadDown = readTrainingControlInput(
+    {},
+    new Set(),
+    [createGamepad([0, 0], [13])],
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.equal(dpadDown.downHeld, true);
+});
+
+test('a fighter can walk off an open ledge and begin falling', () => {
+  let state = createInitialTrainingMovementState();
+  let fellOffRightLedge = false;
+  for (let frame = 0; frame < 60; frame += 1) {
+    state = stepTrainingMovement(state, digital(1), DEFAULT_CONTROLLER_SETTINGS);
+    if (!state.isGrounded && Number(state.positionX) > Number(TRAINING_STAGE_HALF_WIDTH)) {
+      fellOffRightLedge = true;
+      break;
+    }
+  }
+  assert.equal(fellOffRightLedge, true);
+  assert.ok(Number(state.positionY) < 0);
+  assert.ok(Number(state.velocityY) < 0);
+});
+
+test('normal falling accelerates up to the supplied fall-speed cap', () => {
+  let state = {
+    ...createInitialTrainingMovementState(),
+    positionX: worldUnits(Number(TRAINING_STAGE_HALF_WIDTH) + 1),
+  };
+  for (let frame = 0; frame < 30; frame += 1) {
+    state = stepTrainingMovement(state, analog(0), DEFAULT_CONTROLLER_SETTINGS);
+  }
+  assert.equal(state.isGrounded, false);
+  assert.equal(Number(state.velocityY), -Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed));
+  assert.ok(Number(state.positionY) > -Number(TRAINING_RESPAWN_DEPTH));
+});
+
+test('holding down in the air reaches fast-fall speed and releasing returns to normal cap', () => {
+  let state = {
+    ...createInitialTrainingMovementState(),
+    positionX: worldUnits(Number(TRAINING_STAGE_HALF_WIDTH) + 1),
+  };
+  for (let frame = 0; frame < 25; frame += 1) {
+    state = stepTrainingMovement(state, analog(0, false, true), DEFAULT_CONTROLLER_SETTINGS);
+  }
+  assert.equal(state.isFastFalling, true);
+  assert.equal(Number(state.velocityY), -Number(CAPTAIN_FALCON_MOVEMENT.fastFallSpeed));
+  assert.ok(Number(state.positionY) > -Number(TRAINING_RESPAWN_DEPTH));
+
+  state = stepTrainingMovement(state, analog(0), DEFAULT_CONTROLLER_SETTINGS);
+  assert.equal(state.isFastFalling, false);
+  assert.equal(Number(state.velocityY), -Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed));
+});
+
+test('down input does not fast-fall while the fighter is supported', () => {
+  const state = stepTrainingMovement(
+    createInitialTrainingMovementState(),
+    analog(0, false, true),
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.equal(state.isGrounded, true);
+  assert.equal(state.isFastFalling, false);
+  assert.equal(Number(state.velocityY), 0);
+});
+
+test('falling past the training depth respawns the fighter on the platform', () => {
+  const state = stepTrainingMovement(
+    {
+      ...createInitialTrainingMovementState(),
+      positionX: worldUnits(Number(TRAINING_STAGE_HALF_WIDTH) + 1),
+      positionY: worldUnits(-49.9),
+      velocityY: worldUnits(-1.865),
+      isGrounded: false,
+    },
+    analog(0),
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.equal(state.isGrounded, true);
+  assert.equal(Number(state.positionX), 0);
+  assert.equal(Number(state.positionY), 0);
+});
 
 test('Captain Falcon movement values match the supplied Ultimate stats', () => {
   assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.walkSpeed), 0.987);
