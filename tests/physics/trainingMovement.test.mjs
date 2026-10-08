@@ -9,10 +9,13 @@ import {
   CAPTAIN_FALCON_MOVEMENT,
   TRAINING_BLASTZONE_BOUNDS,
   TRAINING_CAMERA_LIMITS,
+  TRAINING_FIGHTER_COLLISION,
+  TRAINING_OMEGA_UNDERSIDE_PROFILE,
   TRAINING_STAGE_HALF_WIDTH,
   TRAINING_STAGE_WIDTH,
   createInitialTrainingMovementState,
   getTrainingCameraPosition,
+  getTrainingPlatformUndersideAt,
   stepTrainingMovement,
 } from '../../src/physics/trainingMovement.ts';
 import { unitsPerFrame, worldUnits } from '../../src/physics/units.ts';
@@ -83,6 +86,26 @@ test('the camera follows the fighter and clamps within the camera-limit rectangl
   );
 });
 
+test('the camera follow toggle switches between bounded tracking and a fixed center', () => {
+  assert.deepEqual(
+    getTrainingCameraPosition(worldUnits(220), worldUnits(160), false),
+    { positionX: 0, positionY: 0 },
+  );
+  assert.deepEqual(
+    getTrainingCameraPosition(worldUnits(42), worldUnits(28), true),
+    { positionX: 42, positionY: 28 },
+  );
+});
+
+test('the Omega underside collision profile matches its visible trapezoid', () => {
+  assert.equal(Number(TRAINING_FIGHTER_COLLISION.height), 18);
+  assert.equal(Number(TRAINING_FIGHTER_COLLISION.halfWidth), 4);
+  assert.equal(TRAINING_OMEGA_UNDERSIDE_PROFILE.length, 8);
+  assert.equal(Number(getTrainingPlatformUndersideAt(worldUnits(0))), -40);
+  assert.ok(Math.abs(Number(getTrainingPlatformUndersideAt(worldUnits(80))) + 3.2) < 1e-9);
+  assert.equal(getTrainingPlatformUndersideAt(worldUnits(81)), null);
+});
+
 test('Captain Falcon gravity and normal and fast-fall caps match the supplied values', () => {
   assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.gravity), 0.12);
   assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed), 1.865);
@@ -137,6 +160,100 @@ test('a fighter can walk off an open ledge and begin falling', () => {
   assert.ok(Number(state.positionY) < 0);
   assert.ok(Number(state.velocityY) < 0);
   assert.equal(state.jumpsUsed, 1);
+});
+
+test('the bean collides with the Omega underside when jumping up from below', () => {
+  const state = stepTrainingMovement(
+    {
+      ...createInitialTrainingMovementState(),
+      positionY: worldUnits(-60),
+      velocityY: unitsPerFrame(3),
+      isGrounded: false,
+      jumpsUsed: 2,
+    },
+    analog(0),
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+
+  assert.equal(Number(state.positionY), -58);
+  assert.equal(Number(state.velocityY), 0);
+  assert.equal(state.isGrounded, false);
+  assert.equal(state.jumpsUsed, 2);
+
+  const slopedUndersideState = stepTrainingMovement(
+    {
+      ...createInitialTrainingMovementState(),
+      positionX: worldUnits(70),
+      positionY: worldUnits(-27),
+      velocityY: unitsPerFrame(3),
+      isGrounded: false,
+      jumpsUsed: 2,
+    },
+    analog(0),
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.ok(Math.abs(Number(slopedUndersideState.positionY) + 26.7) < 1e-9);
+  assert.equal(Number(slopedUndersideState.velocityY), 0);
+});
+
+test('the bean cannot move horizontally through the Omega sides from underneath', () => {
+  const rightSideState = stepTrainingMovement(
+    {
+      ...createInitialTrainingMovementState(),
+      positionX: worldUnits(86),
+      velocityX: unitsPerFrame(-2.552),
+      positionY: worldUnits(-20),
+      isGrounded: false,
+      mode: 'run',
+      inputDirection: -1,
+      framesInDirection: 4,
+    },
+    digital(-1),
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.equal(Number(rightSideState.positionX), 84);
+  assert.equal(Number(rightSideState.velocityX), 0);
+
+  const leftSideState = stepTrainingMovement(
+    {
+      ...createInitialTrainingMovementState(),
+      positionX: worldUnits(-86),
+      velocityX: unitsPerFrame(2.552),
+      positionY: worldUnits(-20),
+      isGrounded: false,
+      mode: 'run',
+      inputDirection: 1,
+      framesInDirection: 4,
+    },
+    digital(1),
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.equal(Number(leftSideState.positionX), -84);
+  assert.equal(Number(leftSideState.velocityX), 0);
+
+  let slopedSideState = {
+    ...createInitialTrainingMovementState(),
+    positionX: worldUnits(78),
+    velocityX: unitsPerFrame(-2.552),
+    positionY: worldUnits(-30),
+    isGrounded: false,
+    mode: 'run',
+    inputDirection: -1,
+    framesInDirection: 4,
+  };
+  slopedSideState = stepTrainingMovement(
+    slopedSideState,
+    digital(-1),
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  slopedSideState = stepTrainingMovement(
+    slopedSideState,
+    digital(-1),
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.ok(Number(slopedSideState.positionX) > 74);
+  assert.ok(Number(slopedSideState.positionX) < 75);
+  assert.equal(Number(slopedSideState.velocityX), 0);
 });
 
 test('walking off a ledge leaves one aerial jump available', () => {

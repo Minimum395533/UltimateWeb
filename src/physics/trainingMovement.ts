@@ -38,6 +38,13 @@ export const TRAINING_OMEGA_UNDERSIDE_PROFILE = [
   { positionX: worldUnits(60.8), positionY: worldUnits(-20.8) },
   { positionX: worldUnits(80), positionY: worldUnits(-3.2) },
 ] as const;
+const TRAINING_OMEGA_RIGHT_SIDE_PROFILE = [
+  { positionY: worldUnits(-40), positionX: worldUnits(25.6) },
+  { positionY: worldUnits(-31.2), positionX: worldUnits(41.6) },
+  { positionY: worldUnits(-20.8), positionX: worldUnits(60.8) },
+  { positionY: worldUnits(-3.2), positionX: worldUnits(80) },
+  { positionY: worldUnits(0), positionX: worldUnits(80) },
+] as const;
 export const FULL_TILT_THRESHOLD = 0.94;
 export const DASH_CONTINUE_THRESHOLD = 0.75;
 
@@ -174,6 +181,34 @@ function getFighterUndersideCollisionAt(positionX: WorldUnit): WorldUnit | null 
   return worldUnits(Math.max(...candidates));
 }
 
+function getTrainingPlatformHorizontalBoundsAt(positionY: WorldUnit): {
+  left: WorldUnit;
+  right: WorldUnit;
+} | null {
+  const y = Number(positionY);
+  const bottom = Number(TRAINING_OMEGA_RIGHT_SIDE_PROFILE[0].positionY);
+  if (y < bottom || y > 0) return null;
+
+  for (let index = 0; index < TRAINING_OMEGA_RIGHT_SIDE_PROFILE.length - 1; index += 1) {
+    const start = TRAINING_OMEGA_RIGHT_SIDE_PROFILE[index];
+    const end = TRAINING_OMEGA_RIGHT_SIDE_PROFILE[index + 1];
+    if (y > Number(end.positionY)) continue;
+    const progress =
+      (y - Number(start.positionY))
+      / (Number(end.positionY) - Number(start.positionY));
+    const right = worldUnits(
+      Number(start.positionX)
+      + (Number(end.positionX) - Number(start.positionX)) * progress,
+    );
+    return { left: worldUnits(-Number(right)), right };
+  }
+
+  const right = TRAINING_OMEGA_RIGHT_SIDE_PROFILE[
+    TRAINING_OMEGA_RIGHT_SIDE_PROFILE.length - 1
+  ].positionX;
+  return { left: worldUnits(-Number(right)), right };
+}
+
 export function createInitialTrainingMovementState(): TrainingMovementState {
   return {
     positionX: worldUnits(0),
@@ -264,6 +299,7 @@ const FULL_HOP_INITIAL_PHASE = (() => {
 function advanceVerticalMovement(
   state: TrainingMovementState,
   input: TrainingControlInput,
+  previousPositionX: WorldUnit = state.positionX,
 ): TrainingMovementState {
   const jumpHeld = Boolean(input.jumpHeld || input.stickJumpAction);
   const jumpPressed = Boolean(input.jumpPressed || (jumpHeld && !state.jumpInputHeld));
@@ -394,6 +430,41 @@ function advanceVerticalMovement(
       Number(airborneState.velocityY) - Number(CAPTAIN_FALCON_MOVEMENT.gravity),
     );
     positionY = Number(airborneState.positionY) + velocityY;
+  }
+
+  if (
+    !state.isGrounded
+    && Number(state.positionY) < 0
+    && positionY + Number(TRAINING_FIGHTER_COLLISION.height) > -40
+  ) {
+    const sideProbeY = worldUnits(
+      Math.min(positionY + Number(TRAINING_FIGHTER_COLLISION.height), 0),
+    );
+    const sideBounds = getTrainingPlatformHorizontalBoundsAt(sideProbeY);
+    const halfWidth = Number(TRAINING_FIGHTER_COLLISION.halfWidth);
+    const previousX = Number(previousPositionX);
+    const currentX = Number(airborneState.positionX);
+    if (
+      sideBounds
+      && previousX - halfWidth >= Number(sideBounds.right)
+      && currentX - halfWidth < Number(sideBounds.right)
+    ) {
+      airborneState = {
+        ...airborneState,
+        positionX: worldUnits(Number(sideBounds.right) + halfWidth),
+        velocityX: unitsPerFrame(0),
+      };
+    } else if (
+      sideBounds
+      && previousX + halfWidth <= Number(sideBounds.left)
+      && currentX + halfWidth > Number(sideBounds.left)
+    ) {
+      airborneState = {
+        ...airborneState,
+        positionX: worldUnits(Number(sideBounds.left) - halfWidth),
+        velocityX: unitsPerFrame(0),
+      };
+    }
   }
 
   const platformUndersideY =
@@ -556,7 +627,7 @@ export function stepTrainingMovement(
       framesInPhase,
       walkBand: 0,
       stickJumpAction: input.stickJumpAction,
-    }, input);
+    }, input, state.positionX);
   }
 
   const walking = magnitude < FULL_TILT_THRESHOLD;
@@ -581,5 +652,5 @@ export function stepTrainingMovement(
     framesInPhase: 0,
     walkBand: walking ? walkBandForMagnitude(magnitude) : 0,
     stickJumpAction: input.stickJumpAction,
-  }, input);
+  }, input, state.positionX);
 }

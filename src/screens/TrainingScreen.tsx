@@ -26,6 +26,7 @@ const TrainingScreen: React.FC = () => {
   const { state } = useGameState();
   const player = state.players[0];
   const [movement, setMovement] = useState(createInitialTrainingMovementState);
+  const [cameraFollowEnabled, setCameraFollowEnabled] = useState(true);
   const movementRef = useRef<TrainingMovementState>(createInitialTrainingMovementState());
   const pressedKeys = useRef(new Set<string>());
   const newlyPressedKeys = useRef(new Set<string>());
@@ -137,6 +138,7 @@ const TrainingScreen: React.FC = () => {
   const cameraPosition = getTrainingCameraPosition(
     movement.positionX,
     movement.positionY,
+    cameraFollowEnabled,
   );
   const cameraXPercent = worldToMapX(Number(cameraPosition.positionX));
   const cameraYPercent = worldToMapY(Number(cameraPosition.positionY));
@@ -194,6 +196,14 @@ const TrainingScreen: React.FC = () => {
             >
               Controller settings
             </button>
+            <button
+              className="training-settings-button"
+              type="button"
+              aria-pressed={cameraFollowEnabled}
+              onClick={() => setCameraFollowEnabled((enabled) => !enabled)}
+            >
+              Camera follow: {cameraFollowEnabled ? 'ON' : 'OFF'}
+            </button>
           </div>
         </div>
 
@@ -221,7 +231,7 @@ const TrainingScreen: React.FC = () => {
             CAMERA LIMITS
           </span>
           <div className="stage-camera-readout">
-            CAMERA&nbsp; X {Number(cameraPosition.positionX).toFixed(0)} · Y {Number(cameraPosition.positionY).toFixed(0)} u
+            CAMERA {cameraFollowEnabled ? 'FOLLOW' : 'CENTER'}&nbsp; X {Number(cameraPosition.positionX).toFixed(0)} · Y {Number(cameraPosition.positionY).toFixed(0)} u
           </div>
           <div
             className="stage-platform"
@@ -287,6 +297,7 @@ const TrainingScreen: React.FC = () => {
           <p><strong>Move:</strong> A / D, your rebinds, or the gamepad D-pad or left stick.</p>
           <p><strong>Analog:</strong> light tilt walks at a scaled speed; a quick full flick dashes; holding full tilt runs.</p>
           <p><strong>Jump:</strong> J / Space, your jump rebinds, or enabled Stick Jump. Hold through the 3-frame squat for a full hop; release during it for a short hop. Press jump again in the air for Falcon’s midair jump.</p>
+          <p><strong>Camera:</strong> toggle follow on to track the fighter within the inner camera limits; turn it off to keep the camera at stage center.</p>
           <p><strong>Fall:</strong> walk or run off either ledge. Hold your down binding (S by default) or tilt the stick down while falling to fast-fall.</p>
           <p><strong>Omega platform:</strong> {Number(TRAINING_STAGE_WIDTH)} u wide, with open ledges at ±{Number(TRAINING_STAGE_HALF_WIDTH)} u.</p>
           <p><strong>Captain Falcon:</strong> gravity {Number(CAPTAIN_FALCON_MOVEMENT.gravity).toFixed(2)} u/frame² · walk {Number(CAPTAIN_FALCON_MOVEMENT.walkSpeed).toFixed(3)} · initial dash {Number(CAPTAIN_FALCON_MOVEMENT.initialDashSpeed).toFixed(3)} · run {Number(CAPTAIN_FALCON_MOVEMENT.runSpeed).toFixed(3)} · fall {Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed).toFixed(3)} · fast fall {Number(CAPTAIN_FALCON_MOVEMENT.fastFallSpeed).toFixed(3)} u/frame.</p>
