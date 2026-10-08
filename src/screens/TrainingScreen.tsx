@@ -6,8 +6,11 @@ import type { PlayerKeybinds } from '../types';
 import { normalizeControllerSettings } from '../physics/controllerSettings';
 import {
   CAPTAIN_FALCON_MOVEMENT,
+  TRAINING_CAMERA_DEADZONE,
+  TRAINING_CAMERA_HALF_WIDTH,
   TRAINING_SIMULATION_HZ,
   TRAINING_STAGE_HALF_WIDTH,
+  TRAINING_STAGE_WIDTH,
   TRAINING_STEP_MILLISECONDS,
   createInitialTrainingMovementState,
   stepTrainingMovement,
@@ -110,15 +113,27 @@ const TrainingScreen: React.FC = () => {
   }, []);
 
   const handleBack = () => navigate('/');
-  const stageHalfWidth = Number(TRAINING_STAGE_HALF_WIDTH);
-  const fighterPositionPercent = Math.max(
-    0,
-    Math.min(100, ((Number(movement.positionX) + stageHalfWidth) / (2 * stageHalfWidth)) * 100),
+  const cameraDeadzone = Number(TRAINING_CAMERA_DEADZONE);
+  const fighterWorldX = Number(movement.positionX);
+  const cameraX = fighterWorldX > cameraDeadzone
+    ? fighterWorldX - cameraDeadzone
+    : fighterWorldX < -cameraDeadzone
+      ? fighterWorldX + cameraDeadzone
+      : 0;
+  const worldToStagePercent = (worldX: number) => (
+    ((worldX - cameraX + Number(TRAINING_CAMERA_HALF_WIDTH))
+      / (2 * Number(TRAINING_CAMERA_HALF_WIDTH))) * 100
   );
+  const stageLeftPercent = worldToStagePercent(-Number(TRAINING_STAGE_HALF_WIDTH));
+  const stageRightPercent = worldToStagePercent(Number(TRAINING_STAGE_HALF_WIDTH));
+  const fighterPositionPercent = worldToStagePercent(fighterWorldX);
   const speed = Math.abs(Number(movement.velocityX));
-  const modeLabel = movement.mode === 'walk' && movement.walkBand > 0
-    ? `WALK · ${movement.walkBand}`
-    : movement.mode.replace('-', ' ').toUpperCase();
+  const verticalSpeed = Math.abs(Number(movement.velocityY));
+  const modeLabel = !movement.isGrounded
+    ? movement.isFastFalling ? 'FAST FALL' : 'FALLING'
+    : movement.mode === 'walk' && movement.walkBand > 0
+      ? `WALK · ${movement.walkBand}`
+      : movement.mode.replace('-', ' ').toUpperCase();
   const settingsLabel = controllerSettings.stickJumpEnabled ? 'ON' : 'OFF';
 
   return (
@@ -151,17 +166,39 @@ const TrainingScreen: React.FC = () => {
           </div>
         </div>
 
-        <div className="training-stage" aria-label="Training stage">
+        <div
+          className="training-stage"
+          aria-label={`Omega training platform, ${Number(TRAINING_STAGE_WIDTH)} units long, with open ledges`}
+        >
           <div className="stage-grid" aria-hidden="true" />
-          <div className="stage-axis" aria-hidden="true">
-            <span>−{stageHalfWidth} u</span>
-            <span>0 u</span>
-            <span>+{stageHalfWidth} u</span>
+          <div className="stage-caption" aria-hidden="true">
+            OMEGA PLATFORM <span>{Number(TRAINING_STAGE_WIDTH)} U · OPEN LEDGES</span>
           </div>
-          <div className="stage-floor" aria-hidden="true" />
           <div
-            className={`training-bean is-${movement.mode}`}
-            style={{ left: `${fighterPositionPercent}%` }}
+            className="stage-platform"
+            style={{
+              left: `${stageLeftPercent}%`,
+              width: `${stageRightPercent - stageLeftPercent}%`,
+            }}
+            aria-hidden="true"
+          />
+          <div className="stage-axis" aria-hidden="true">
+            <span className="stage-axis-label" style={{ left: `${stageLeftPercent}%` }}>
+              −{Number(TRAINING_STAGE_HALF_WIDTH)} u · LEDGE
+            </span>
+            <span className="stage-axis-label" style={{ left: `${worldToStagePercent(0)}%` }}>
+              0 u
+            </span>
+            <span className="stage-axis-label" style={{ left: `${stageRightPercent}%` }}>
+              +{Number(TRAINING_STAGE_HALF_WIDTH)} u · LEDGE
+            </span>
+          </div>
+          <div
+            className={`training-bean is-${movement.mode}${movement.isGrounded ? '' : ' is-airborne'}${movement.isFastFalling ? ' is-fast-falling' : ''}`}
+            style={{
+              left: `${fighterPositionPercent}%`,
+              bottom: `calc(52% + ${Number(movement.positionY) * 0.5}cqw)`,
+            }}
             role="img"
             aria-label="Simple Captain Falcon movement prototype"
           />
@@ -177,8 +214,16 @@ const TrainingScreen: React.FC = () => {
             <strong>{speed.toFixed(3)} <small>u/frame</small></strong>
           </div>
           <div>
-            <span>POSITION</span>
+            <span>X POSITION</span>
             <strong>{Number(movement.positionX).toFixed(2)} <small>u</small></strong>
+          </div>
+          <div>
+            <span>ALTITUDE</span>
+            <strong>{Number(movement.positionY).toFixed(2)} <small>u</small></strong>
+          </div>
+          <div>
+            <span>VERTICAL SPEED</span>
+            <strong>{verticalSpeed.toFixed(3)} <small>u/frame</small></strong>
           </div>
           <div className={movement.stickJumpAction ? 'jump-status is-active' : 'jump-status'}>
             <span>STICK JUMP</span>
@@ -189,7 +234,8 @@ const TrainingScreen: React.FC = () => {
         <div className="training-instructions">
           <p><strong>Move:</strong> A / D, your rebinds, or the gamepad D-pad or left stick.</p>
           <p><strong>Analog:</strong> light tilt walks at a scaled speed; a quick full flick dashes; holding full tilt runs.</p>
-          <p><strong>Captain Falcon data:</strong> walk {Number(CAPTAIN_FALCON_MOVEMENT.walkSpeed).toFixed(3)} · initial dash {Number(CAPTAIN_FALCON_MOVEMENT.initialDashSpeed).toFixed(3)} · run {Number(CAPTAIN_FALCON_MOVEMENT.runSpeed).toFixed(3)} u/frame.</p>
+          <p><strong>Fall:</strong> walk or run off either ledge. Hold your down binding (S by default) or tilt the stick down while falling to fast-fall.</p>
+          <p><strong>Captain Falcon speeds:</strong> walk {Number(CAPTAIN_FALCON_MOVEMENT.walkSpeed).toFixed(3)} · initial dash {Number(CAPTAIN_FALCON_MOVEMENT.initialDashSpeed).toFixed(3)} · run {Number(CAPTAIN_FALCON_MOVEMENT.runSpeed).toFixed(3)} · fall {Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed).toFixed(3)} · fast fall {Number(CAPTAIN_FALCON_MOVEMENT.fastFallSpeed).toFixed(3)} u/frame.</p>
           <p className="training-note">Stick Jump only reports its input here. Jump physics and attacks are not implemented.</p>
         </div>
       </section>

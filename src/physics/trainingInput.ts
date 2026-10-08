@@ -23,6 +23,8 @@ export interface TrainingControlInput {
   horizontal: number;
   /** True for keyboard, D-pad, or button movement; these are always full strength. */
   isDigital: boolean;
+  /** Hold down while airborne to reach the character's fast-fall speed. */
+  downHeld: boolean;
   /** Input event only. Training mode does not yet simulate a jump. */
   stickJumpAction: boolean;
 }
@@ -52,7 +54,7 @@ export function applyAnalogDeadzone(
 function getBinding(
   bindings: PlayerKeybinds,
   device: InputBinding['device'],
-  input: 'left' | 'right',
+  input: 'left' | 'right' | 'down',
 ): InputBinding {
   const scopedBinding = bindings[`${device}:${input}`];
   if (scopedBinding?.device === device) return scopedBinding;
@@ -112,6 +114,8 @@ export function readTrainingControlInput(
   const rightKeyboard = readBinding(getBinding(bindings, 'keyboard', 'right'), pressedKeys, null);
   const leftGamepad = readBinding(getBinding(bindings, 'gamepad', 'left'), pressedKeys, gamepad);
   const rightGamepad = readBinding(getBinding(bindings, 'gamepad', 'right'), pressedKeys, gamepad);
+  const downKeyboard = readBinding(getBinding(bindings, 'keyboard', 'down'), pressedKeys, null);
+  const downGamepad = readBinding(getBinding(bindings, 'gamepad', 'down'), pressedKeys, gamepad);
 
   const keyboardDirection = rightKeyboard.value - leftKeyboard.value;
   const gamepadButtonDirection =
@@ -119,6 +123,12 @@ export function readTrainingControlInput(
     - (leftGamepad.isAnalog ? 0 : leftGamepad.value);
   const dpadDirection = Number(buttonPressed(gamepad, 15)) - Number(buttonPressed(gamepad, 14));
   const digitalDirection = keyboardDirection + gamepadButtonDirection + dpadDirection;
+  const gamepadDownHeld = downGamepad.isAnalog
+    ? applyAnalogDeadzone(downGamepad.value) >= 0.65
+    : downGamepad.value > 0;
+  const downHeld = downKeyboard.value > 0
+    || gamepadDownHeld
+    || buttonPressed(gamepad, 13);
 
   let horizontal: number;
   let isDigital: boolean;
@@ -136,6 +146,7 @@ export function readTrainingControlInput(
   return {
     horizontal,
     isDigital,
+    downHeld,
     stickJumpAction: shouldTriggerStickJump(gamepad?.axes[1] ?? 0, settings),
   };
 }

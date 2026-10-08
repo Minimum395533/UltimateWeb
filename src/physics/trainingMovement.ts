@@ -10,7 +10,12 @@ import type { TrainingControlInput } from './trainingInput';
 
 export const TRAINING_SIMULATION_HZ = 60;
 export const TRAINING_STEP_MILLISECONDS = 1000 / TRAINING_SIMULATION_HZ;
-export const TRAINING_STAGE_HALF_WIDTH = worldUnits(50);
+export const TRAINING_STAGE_WIDTH = worldUnits(160);
+export const TRAINING_STAGE_HALF_WIDTH = worldUnits(Number(TRAINING_STAGE_WIDTH) / 2);
+export const TRAINING_CAMERA_HALF_WIDTH = worldUnits(100);
+export const TRAINING_CAMERA_DEADZONE = worldUnits(40);
+export const TRAINING_RESPAWN_DEPTH = worldUnits(50);
+export const TRAINING_FALL_ACCELERATION = unitsPerFrameSquared(0.12);
 export const FULL_TILT_THRESHOLD = 0.94;
 export const DASH_CONTINUE_THRESHOLD = 0.75;
 
@@ -23,6 +28,8 @@ export const CAPTAIN_FALCON_MOVEMENT = {
   baseAcceleration: unitsPerFrameSquared(0.11),
   additionalAcceleration: unitsPerFrameSquared(0.066),
   maxAcceleration: unitsPerFrameSquared(0.176),
+  fallSpeed: unitsPerFrame(1.865),
+  fastFallSpeed: unitsPerFrame(2.984),
   regularDashAccelerationDelayFrames: 1,
   turnaroundDashAccelerationDelayFrames: 3,
 } as const;
@@ -39,6 +46,10 @@ export type WalkBand = 0 | 1 | 2 | 3;
 export interface TrainingMovementState {
   positionX: WorldUnit;
   velocityX: WorldUnitsPerFrame;
+  positionY: WorldUnit;
+  velocityY: WorldUnitsPerFrame;
+  isGrounded: boolean;
+  isFastFalling: boolean;
   mode: MovementMode;
   facingDirection: -1 | 1;
   inputDirection: -1 | 0 | 1;
@@ -52,6 +63,10 @@ export function createInitialTrainingMovementState(): TrainingMovementState {
   return {
     positionX: worldUnits(0),
     velocityX: unitsPerFrame(0),
+    positionY: worldUnits(0),
+    velocityY: unitsPerFrame(0),
+    isGrounded: true,
+    isFastFalling: false,
     mode: 'idle',
     facingDirection: 1,
     inputDirection: 0,
@@ -76,15 +91,56 @@ function advancePosition(
   position: WorldUnit,
   velocity: WorldUnitsPerFrame,
 ): { positionX: WorldUnit; velocityX: WorldUnitsPerFrame } {
-  const nextPosition = Number(position) + Number(velocity);
-  const boundedPosition = Math.max(
-    -Number(TRAINING_STAGE_HALF_WIDTH),
-    Math.min(Number(TRAINING_STAGE_HALF_WIDTH), nextPosition),
+  return {
+    positionX: worldUnits(Number(position) + Number(velocity)),
+    velocityX: velocity,
+  };
+}
+
+function advanceVerticalMovement(
+  state: TrainingMovementState,
+  downHeld: boolean,
+): TrainingMovementState {
+  const supported = Math.abs(Number(state.positionX)) <= Number(TRAINING_STAGE_HALF_WIDTH);
+  if (state.isGrounded && supported) {
+    return {
+      ...state,
+      positionY: worldUnits(0),
+      velocityY: unitsPerFrame(0),
+      isGrounded: true,
+      isFastFalling: false,
+    };
+  }
+
+  const fallSpeed = downHeld
+    ? Number(CAPTAIN_FALCON_MOVEMENT.fastFallSpeed)
+    : Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed);
+  const velocityY = Math.max(
+    -fallSpeed,
+    Number(state.velocityY) - Number(TRAINING_FALL_ACCELERATION),
   );
+  const positionY = Number(state.positionY) + velocityY;
+
+  if (!state.isGrounded && Number(state.positionY) > 0 && positionY <= 0 && supported) {
+    return {
+      ...state,
+      positionY: worldUnits(0),
+      velocityY: unitsPerFrame(0),
+      isGrounded: true,
+      isFastFalling: false,
+    };
+  }
+
+  if (positionY <= -Number(TRAINING_RESPAWN_DEPTH)) {
+    return createInitialTrainingMovementState();
+  }
 
   return {
-    positionX: worldUnits(boundedPosition),
-    velocityX: boundedPosition === nextPosition ? velocity : unitsPerFrame(0),
+    ...state,
+    positionY: worldUnits(positionY),
+    velocityY: unitsPerFrame(velocityY),
+    isGrounded: false,
+    isFastFalling: downHeld,
   };
 }
 
@@ -133,7 +189,7 @@ export function stepTrainingMovement(
   const direction = Math.sign(horizontal) as -1 | 0 | 1;
 
   if (direction === 0 || magnitude < 0.01) {
-    return {
+    return advanceVerticalMovement({
       ...state,
       velocityX: unitsPerFrame(0),
       mode: 'idle',
@@ -142,7 +198,7 @@ export function stepTrainingMovement(
       framesInPhase: 0,
       walkBand: 0,
       stickJumpAction: input.stickJumpAction,
-    };
+    }, input.downHeld);
   }
 
   const directionChanged = direction !== state.inputDirection;
@@ -155,7 +211,10 @@ export function stepTrainingMovement(
     && Math.abs(Number(state.velocityX)) > 0;
 
   if (directionChanged && quickInput) {
-    return startDash(state, direction, turnaround, input, framesInDirection);
+    return advanceVerticalMovement(
+      startDash(state, direction, turnaround, input, framesInDirection),
+      input.downHeld,
+    );
   }
 
   const dashMode = state.mode === 'initial-dash' || state.mode === 'turnaround-dash';
@@ -182,7 +241,7 @@ export function stepTrainingMovement(
     const moved = advancePosition(state.positionX, velocityX);
     const framesInPhase = state.framesInPhase + 1;
 
-    return {
+    return advanceVerticalMovement({
       ...state,
       ...moved,
       velocityX: moved.velocityX,
@@ -193,7 +252,7 @@ export function stepTrainingMovement(
       framesInPhase,
       walkBand: 0,
       stickJumpAction: input.stickJumpAction,
-    };
+    }, input.downHeld);
   }
 
   const walking = magnitude < FULL_TILT_THRESHOLD;
@@ -207,7 +266,7 @@ export function stepTrainingMovement(
   );
   const moved = advancePosition(state.positionX, velocityX);
 
-  return {
+  return advanceVerticalMovement({
     ...state,
     ...moved,
     velocityX: moved.velocityX,
@@ -218,5 +277,5 @@ export function stepTrainingMovement(
     framesInPhase: 0,
     walkBand: walking ? walkBandForMagnitude(magnitude) : 0,
     stickJumpAction: input.stickJumpAction,
-  };
+  }, input.downHeld);
 }
