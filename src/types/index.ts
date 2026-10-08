@@ -1,5 +1,12 @@
 // Core types for UltimateWeb
 
+import type {
+  Velocity2,
+  WorldOffset2,
+  WorldPosition2,
+  WorldUnit,
+} from '../physics/units';
+
 // ============================================
 // Player & Character Types
 // ============================================
@@ -31,7 +38,7 @@ export interface CharacterColor {
 // For name display above head (future gameplay)
 export interface NameDisplay {
   text: string;
-  position: Vector2;
+  position: WorldPosition2;
   arrowDirection: 'up' | 'down' | 'left' | 'right' | 'none';
   color: string;
 }
@@ -173,14 +180,10 @@ export interface AppState {
 // For future gameplay (data structure only)
 // ============================================
 
-export interface Vector2 {
-  x: number;
-  y: number;
-}
-
 export interface Hitbox {
-  position: Vector2;
-  radius: number;
+  /** Local offset from the fighter's origin, in world units. */
+  position: WorldOffset2;
+  radius: WorldUnit;
   damage: number;
   angle: number;
   kbg: number;
@@ -195,21 +198,22 @@ export interface Hitbox {
 }
 
 export interface Hurtbox {
-  position: Vector2;
-  radius: number;
+  /** Local offset from the fighter's origin, in world units. */
+  position: WorldOffset2;
+  radius: WorldUnit;
   isVulnerable: boolean;
 }
 
 export interface PlayerGameState {
-  position: Vector2;
-  velocity: Vector2;
+  position: WorldPosition2;
+  velocity: Velocity2;
   percent: number;
   stocks: number;
   character: Character;
   colorIndex: number;
   name: string;
   // For name display above head
-  namePosition: Vector2;
+  namePosition: WorldPosition2;
   arrowDirection: 'up' | 'down' | 'left' | 'right' | 'none';
   hitboxes: Hitbox[];
   hurtboxes: Hurtbox[];
