@@ -1,1 +1,2 @@
 - [Smash world units](smash-world-units.md) — use the user's modern Smash scale (about 0.1 m/u) and frame-based movement dimensions as the gameplay foundation.
+- [Ultimate ledge recovery](ultimate-ledge-recovery.md) — include all five ledge actions, with a ledge-specific attack; confirm exact tuning before calling it accurate.
