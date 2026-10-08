@@ -6,13 +6,14 @@ import type { PlayerKeybinds } from '../types';
 import { normalizeControllerSettings } from '../physics/controllerSettings';
 import {
   CAPTAIN_FALCON_MOVEMENT,
-  TRAINING_CAMERA_DEADZONE,
-  TRAINING_CAMERA_HALF_WIDTH,
+  TRAINING_BLASTZONE_BOUNDS,
+  TRAINING_CAMERA_LIMITS,
   TRAINING_SIMULATION_HZ,
   TRAINING_STAGE_HALF_WIDTH,
   TRAINING_STAGE_WIDTH,
   TRAINING_STEP_MILLISECONDS,
   createInitialTrainingMovementState,
+  getTrainingCameraPosition,
   stepTrainingMovement,
 } from '../physics/trainingMovement';
 import type { TrainingMovementState } from '../physics/trainingMovement';
@@ -113,20 +114,33 @@ const TrainingScreen: React.FC = () => {
   }, []);
 
   const handleBack = () => navigate('/');
-  const cameraDeadzone = Number(TRAINING_CAMERA_DEADZONE);
   const fighterWorldX = Number(movement.positionX);
-  const cameraX = fighterWorldX > cameraDeadzone
-    ? fighterWorldX - cameraDeadzone
-    : fighterWorldX < -cameraDeadzone
-      ? fighterWorldX + cameraDeadzone
-      : 0;
-  const worldToStagePercent = (worldX: number) => (
-    ((worldX - cameraX + Number(TRAINING_CAMERA_HALF_WIDTH))
-      / (2 * Number(TRAINING_CAMERA_HALF_WIDTH))) * 100
+  const blastzoneWidth =
+    Number(TRAINING_BLASTZONE_BOUNDS.right) - Number(TRAINING_BLASTZONE_BOUNDS.left);
+  const blastzoneHeight =
+    Number(TRAINING_BLASTZONE_BOUNDS.top) - Number(TRAINING_BLASTZONE_BOUNDS.bottom);
+  const worldToMapX = (worldX: number) => (
+    ((worldX - Number(TRAINING_BLASTZONE_BOUNDS.left)) / blastzoneWidth) * 100
   );
-  const stageLeftPercent = worldToStagePercent(-Number(TRAINING_STAGE_HALF_WIDTH));
-  const stageRightPercent = worldToStagePercent(Number(TRAINING_STAGE_HALF_WIDTH));
-  const fighterPositionPercent = worldToStagePercent(fighterWorldX);
+  const worldToMapY = (worldY: number) => (
+    ((Number(TRAINING_BLASTZONE_BOUNDS.top) - worldY) / blastzoneHeight) * 100
+  );
+  const cameraPosition = getTrainingCameraPosition(
+    movement.positionX,
+    movement.positionY,
+  );
+  const cameraXPercent = worldToMapX(Number(cameraPosition.positionX));
+  const cameraYPercent = worldToMapY(Number(cameraPosition.positionY));
+  const stageLeftPercent = worldToMapX(-Number(TRAINING_STAGE_HALF_WIDTH));
+  const stageRightPercent = worldToMapX(Number(TRAINING_STAGE_HALF_WIDTH));
+  const platformTopPercent = worldToMapY(0);
+  const platformBottomPercent = worldToMapY(-40);
+  const cameraLeftPercent = worldToMapX(Number(TRAINING_CAMERA_LIMITS.left));
+  const cameraRightPercent = worldToMapX(Number(TRAINING_CAMERA_LIMITS.right));
+  const cameraTopPercent = worldToMapY(Number(TRAINING_CAMERA_LIMITS.top));
+  const cameraBottomPercent = worldToMapY(Number(TRAINING_CAMERA_LIMITS.bottom));
+  const fighterPositionPercent = worldToMapX(fighterWorldX);
+  const fighterHeightPercent = worldToMapY(Number(movement.positionY));
   const speed = Math.abs(Number(movement.velocityX));
   const verticalSpeed = Math.abs(Number(movement.velocityY));
   const modeLabel = !movement.isGrounded
@@ -166,27 +180,50 @@ const TrainingScreen: React.FC = () => {
           </div>
         </div>
 
-        <div
-          className="training-stage"
-          aria-label={`Omega training platform, ${Number(TRAINING_STAGE_WIDTH)} units long, with open ledges`}
-        >
+        <div className="training-stage" aria-label="Training stage bounds map">
           <div className="stage-grid" aria-hidden="true" />
-          <div className="stage-caption" aria-hidden="true">
-            OMEGA PLATFORM <span>{Number(TRAINING_STAGE_WIDTH)} U · OPEN LEDGES</span>
+          <div className="stage-blastzone" aria-hidden="true" />
+          <span className="stage-blastzone-label">BLASTZONE</span>
+          <div
+            className="stage-camera-limits"
+            style={{
+              left: `${cameraLeftPercent}%`,
+              top: `${cameraTopPercent}%`,
+              width: `${cameraRightPercent - cameraLeftPercent}%`,
+              height: `${cameraBottomPercent - cameraTopPercent}%`,
+            }}
+            aria-hidden="true"
+          />
+          <span
+            className="stage-camera-label"
+            style={{
+              left: `${cameraLeftPercent}%`,
+              top: `${cameraTopPercent}%`,
+            }}
+          >
+            CAMERA LIMITS
+          </span>
+          <div className="stage-camera-readout">
+            CAMERA&nbsp; X {Number(cameraPosition.positionX).toFixed(0)} · Y {Number(cameraPosition.positionY).toFixed(0)} u
           </div>
           <div
             className="stage-platform"
             style={{
               left: `${stageLeftPercent}%`,
               width: `${stageRightPercent - stageLeftPercent}%`,
+              top: `${platformTopPercent}%`,
+              height: `${platformBottomPercent - platformTopPercent}%`,
             }}
             aria-hidden="true"
           />
+          <span className="stage-platform-label" style={{ top: `${platformTopPercent + (platformBottomPercent - platformTopPercent) * 0.7}%` }}>
+            OMEGA · {Number(TRAINING_STAGE_WIDTH)} u
+          </span>
           <div className="stage-axis" aria-hidden="true">
             <span className="stage-axis-label" style={{ left: `${stageLeftPercent}%` }}>
               −{Number(TRAINING_STAGE_HALF_WIDTH)} u · LEDGE
             </span>
-            <span className="stage-axis-label" style={{ left: `${worldToStagePercent(0)}%` }}>
+            <span className="stage-axis-label" style={{ left: `${worldToMapX(0)}%` }}>
               0 u
             </span>
             <span className="stage-axis-label" style={{ left: `${stageRightPercent}%` }}>
@@ -194,10 +231,15 @@ const TrainingScreen: React.FC = () => {
             </span>
           </div>
           <div
+            className="stage-camera-marker"
+            style={{ left: `${cameraXPercent}%`, top: `${cameraYPercent}%` }}
+            aria-hidden="true"
+          />
+          <div
             className={`training-bean is-${movement.mode}${movement.isGrounded ? '' : ' is-airborne'}${movement.isFastFalling ? ' is-fast-falling' : ''}`}
             style={{
               left: `${fighterPositionPercent}%`,
-              bottom: `calc(52% + ${Number(movement.positionY) * 0.5}cqw)`,
+              top: `${fighterHeightPercent}%`,
             }}
             role="img"
             aria-label="Simple Captain Falcon movement prototype"

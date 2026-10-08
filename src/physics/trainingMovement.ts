@@ -12,10 +12,18 @@ export const TRAINING_SIMULATION_HZ = 60;
 export const TRAINING_STEP_MILLISECONDS = 1000 / TRAINING_SIMULATION_HZ;
 export const TRAINING_STAGE_WIDTH = worldUnits(160);
 export const TRAINING_STAGE_HALF_WIDTH = worldUnits(Number(TRAINING_STAGE_WIDTH) / 2);
-export const TRAINING_CAMERA_HALF_WIDTH = worldUnits(100);
-export const TRAINING_CAMERA_DEADZONE = worldUnits(40);
-export const TRAINING_RESPAWN_DEPTH = worldUnits(50);
-export const TRAINING_FALL_ACCELERATION = unitsPerFrameSquared(0.12);
+export const TRAINING_BLASTZONE_BOUNDS = {
+  left: worldUnits(-240),
+  right: worldUnits(240),
+  bottom: worldUnits(-140),
+  top: worldUnits(179),
+} as const;
+export const TRAINING_CAMERA_LIMITS = {
+  left: worldUnits(-180),
+  right: worldUnits(180),
+  bottom: worldUnits(-60),
+  top: worldUnits(130),
+} as const;
 export const FULL_TILT_THRESHOLD = 0.94;
 export const DASH_CONTINUE_THRESHOLD = 0.75;
 
@@ -28,6 +36,7 @@ export const CAPTAIN_FALCON_MOVEMENT = {
   baseAcceleration: unitsPerFrameSquared(0.11),
   additionalAcceleration: unitsPerFrameSquared(0.066),
   maxAcceleration: unitsPerFrameSquared(0.176),
+  gravity: unitsPerFrameSquared(0.12),
   fallSpeed: unitsPerFrame(1.865),
   fastFallSpeed: unitsPerFrame(2.984),
   regularDashAccelerationDelayFrames: 1,
@@ -57,6 +66,27 @@ export interface TrainingMovementState {
   framesInPhase: number;
   walkBand: WalkBand;
   stickJumpAction: boolean;
+}
+
+export interface TrainingCameraPosition {
+  positionX: WorldUnit;
+  positionY: WorldUnit;
+}
+
+export function getTrainingCameraPosition(
+  fighterX: WorldUnit,
+  fighterY: WorldUnit,
+): TrainingCameraPosition {
+  return {
+    positionX: worldUnits(Math.max(
+      Number(TRAINING_CAMERA_LIMITS.left),
+      Math.min(Number(TRAINING_CAMERA_LIMITS.right), Number(fighterX)),
+    )),
+    positionY: worldUnits(Math.max(
+      Number(TRAINING_CAMERA_LIMITS.bottom),
+      Math.min(Number(TRAINING_CAMERA_LIMITS.top), Number(fighterY)),
+    )),
+  };
 }
 
 export function createInitialTrainingMovementState(): TrainingMovementState {
@@ -97,10 +127,21 @@ function advancePosition(
   };
 }
 
+function isOutsideTrainingBlastzone(positionX: WorldUnit, positionY: WorldUnit): boolean {
+  return Number(positionX) < Number(TRAINING_BLASTZONE_BOUNDS.left)
+    || Number(positionX) > Number(TRAINING_BLASTZONE_BOUNDS.right)
+    || Number(positionY) < Number(TRAINING_BLASTZONE_BOUNDS.bottom)
+    || Number(positionY) > Number(TRAINING_BLASTZONE_BOUNDS.top);
+}
+
 function advanceVerticalMovement(
   state: TrainingMovementState,
   downHeld: boolean,
 ): TrainingMovementState {
+  if (isOutsideTrainingBlastzone(state.positionX, state.positionY)) {
+    return createInitialTrainingMovementState();
+  }
+
   const supported = Math.abs(Number(state.positionX)) <= Number(TRAINING_STAGE_HALF_WIDTH);
   if (state.isGrounded && supported) {
     return {
@@ -117,7 +158,7 @@ function advanceVerticalMovement(
     : Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed);
   const velocityY = Math.max(
     -fallSpeed,
-    Number(state.velocityY) - Number(TRAINING_FALL_ACCELERATION),
+    Number(state.velocityY) - Number(CAPTAIN_FALCON_MOVEMENT.gravity),
   );
   const positionY = Number(state.positionY) + velocityY;
 
@@ -131,17 +172,20 @@ function advanceVerticalMovement(
     };
   }
 
-  if (positionY <= -Number(TRAINING_RESPAWN_DEPTH)) {
-    return createInitialTrainingMovementState();
-  }
-
-  return {
+  const nextState = {
     ...state,
     positionY: worldUnits(positionY),
     velocityY: unitsPerFrame(velocityY),
     isGrounded: false,
     isFastFalling: downHeld,
   };
+  if (
+    isOutsideTrainingBlastzone(nextState.positionX, nextState.positionY)
+  ) {
+    return createInitialTrainingMovementState();
+  }
+
+  return nextState;
 }
 
 function walkBandForMagnitude(magnitude: number): WalkBand {
