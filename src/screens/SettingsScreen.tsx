@@ -94,7 +94,14 @@ const SettingsScreen: React.FC = () => {
 
         <div className="settings-section">
           <h2>Controls</h2>
-          <p>Configure keybinds in the NAMES/KEYBINDS menu.</p>
+          <p>Rebind every keyboard and controller input in Button Settings.</p>
+          <button
+            type="button"
+            className="controls-link"
+            onClick={() => navigate('/keybinds')}
+          >
+            Open button settings <span aria-hidden="true">↗</span>
+          </button>
         </div>
       </div>
     </div>

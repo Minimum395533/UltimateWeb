@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import type { 
   AppState, 
   PlayerProfile,
-  GameSettings
+  GameSettings,
+  PlayerKeybinds,
 } from '../types';
 import { 
   DEFAULT_KEYBINDS_KEYBOARD_P1,
@@ -85,7 +86,7 @@ export function useGameState() {
     updatePlayer(playerIndex, { colorIndex });
   };
 
-  const updatePlayerKeybinds = (playerIndex: number, keybinds: any) => {
+  const updatePlayerKeybinds = (playerIndex: number, keybinds: PlayerKeybinds) => {
     updatePlayer(playerIndex, { keybinds });
   };
 

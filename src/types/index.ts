@@ -48,12 +48,19 @@ export type SmashInput =
   | 'left'
   | 'right'
   | 'jump'
+  | 'jumpAlt'
   | 'attack'
   | 'special'
+  | 'specialL'
+  | 'specialZL'
   | 'grab'
   | 'shield'
   | 'dodge'
-  | 'taunt'
+  | 'tauntUp'
+  | 'tauntDown'
+  | 'tauntLeft'
+  | 'tauntRight'
+  | 'tiltAttack'
   | 'start';
 
 export interface InputBinding {
@@ -77,11 +84,19 @@ export const DEFAULT_KEYBINDS_KEYBOARD_P1: PlayerKeybinds = {
   left: { device: 'keyboard', keyCode: 'KeyA' },
   right: { device: 'keyboard', keyCode: 'KeyD' },
   jump: { device: 'keyboard', keyCode: 'KeyJ' },
+  jumpAlt: { device: 'keyboard', keyCode: 'Space' },
   attack: { device: 'keyboard', keyCode: 'KeyK' },
   special: { device: 'keyboard', keyCode: 'KeyL' },
+  specialL: { device: 'keyboard', keyCode: 'KeyH' },
+  specialZL: { device: 'keyboard', keyCode: 'KeyG' },
   grab: { device: 'keyboard', keyCode: 'KeyU' },
   shield: { device: 'keyboard', keyCode: 'KeyI' },
   dodge: { device: 'keyboard', keyCode: 'KeyO' },
+  tauntUp: { device: 'keyboard', keyCode: 'NumpadAdd' },
+  tauntDown: { device: 'keyboard', keyCode: 'NumpadSubtract' },
+  tauntLeft: { device: 'keyboard', keyCode: 'NumpadMultiply' },
+  tauntRight: { device: 'keyboard', keyCode: 'NumpadDecimal' },
+  tiltAttack: { device: 'keyboard', keyCode: 'KeyY' },
   taunt: { device: 'keyboard', keyCode: 'KeyP' },
   start: { device: 'keyboard', keyCode: 'Enter' },
 };
@@ -93,11 +108,19 @@ export const DEFAULT_KEYBINDS_KEYBOARD_P2: PlayerKeybinds = {
   left: { device: 'keyboard', keyCode: 'ArrowLeft' },
   right: { device: 'keyboard', keyCode: 'ArrowRight' },
   jump: { device: 'keyboard', keyCode: 'Numpad1' },
+  jumpAlt: { device: 'keyboard', keyCode: 'Numpad8' },
   attack: { device: 'keyboard', keyCode: 'Numpad2' },
   special: { device: 'keyboard', keyCode: 'Numpad3' },
+  specialL: { device: 'keyboard', keyCode: 'Numpad9' },
+  specialZL: { device: 'keyboard', keyCode: 'Numpad0' },
   grab: { device: 'keyboard', keyCode: 'Numpad4' },
   shield: { device: 'keyboard', keyCode: 'Numpad5' },
   dodge: { device: 'keyboard', keyCode: 'Numpad6' },
+  tauntUp: { device: 'keyboard', keyCode: 'KeyP' },
+  tauntDown: { device: 'keyboard', keyCode: 'KeyM' },
+  tauntLeft: { device: 'keyboard', keyCode: 'KeyN' },
+  tauntRight: { device: 'keyboard', keyCode: 'KeyB' },
+  tiltAttack: { device: 'keyboard', keyCode: 'Numpad7' },
   taunt: { device: 'keyboard', keyCode: 'Numpad7' },
   start: { device: 'keyboard', keyCode: 'NumpadEnter' },
 };
@@ -108,13 +131,21 @@ export const DEFAULT_KEYBINDS_GAMEPAD: PlayerKeybinds = {
   down: { device: 'gamepad', axisIndex: 1, axisDirection: 'positive' },
   left: { device: 'gamepad', axisIndex: 0, axisDirection: 'negative' },
   right: { device: 'gamepad', axisIndex: 0, axisDirection: 'positive' },
-  jump: { device: 'gamepad', buttonIndex: 0 },
+  jump: { device: 'gamepad', buttonIndex: 3 },
+  jumpAlt: { device: 'gamepad', buttonIndex: 2 },
   attack: { device: 'gamepad', buttonIndex: 1 },
-  special: { device: 'gamepad', buttonIndex: 2 },
-  grab: { device: 'gamepad', buttonIndex: 3 },
-  shield: { device: 'gamepad', buttonIndex: 4 },
-  dodge: { device: 'gamepad', buttonIndex: 5 },
-  taunt: { device: 'gamepad', buttonIndex: 6 },
+  special: { device: 'gamepad', buttonIndex: 0 },
+  specialL: { device: 'gamepad', buttonIndex: 4 },
+  specialZL: { device: 'gamepad', buttonIndex: 6 },
+  grab: { device: 'gamepad', buttonIndex: 5 },
+  shield: { device: 'gamepad', buttonIndex: 7 },
+  dodge: { device: 'gamepad', buttonIndex: 8 },
+  tauntUp: { device: 'gamepad', buttonIndex: 12 },
+  tauntDown: { device: 'gamepad', buttonIndex: 13 },
+  tauntLeft: { device: 'gamepad', buttonIndex: 14 },
+  tauntRight: { device: 'gamepad', buttonIndex: 15 },
+  tiltAttack: { device: 'gamepad', axisIndex: 2, axisDirection: 'positive' },
+  taunt: { device: 'gamepad', buttonIndex: 12 },
   start: { device: 'gamepad', buttonIndex: 9 },
 };
 
@@ -221,8 +252,10 @@ export const CAPTAIN_FALCON_COLORS: CharacterColor[] = [
 
 export const SMASH_INPUTS: SmashInput[] = [
   'up', 'down', 'left', 'right',
-  'jump', 'attack', 'special', 'grab',
-  'shield', 'dodge', 'taunt', 'start'
+  'jump', 'jumpAlt', 'attack', 'special', 'specialL', 'specialZL',
+  'grab', 'shield', 'dodge',
+  'tauntUp', 'tauntDown', 'tauntLeft', 'tauntRight',
+  'tiltAttack', 'start',
 ];
 
 export const CHARACTERS: Character[] = [

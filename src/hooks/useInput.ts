@@ -1,33 +1,39 @@
 import { useState, useEffect } from 'react';
-import type { InputBinding, SmashInput, PlayerKeybinds } from '../types';
+import {
+  DEFAULT_KEYBINDS_GAMEPAD,
+  DEFAULT_KEYBINDS_KEYBOARD_P1,
+  DEFAULT_KEYBINDS_KEYBOARD_P2,
+  SMASH_INPUTS,
+} from '../types';
+import type { InputBinding, InputDevice, SmashInput, PlayerKeybinds } from '../types';
 
 // Gamepad button names for display
 const GAMEPAD_BUTTON_NAMES: Record<number, string> = {
-  0: 'A',
-  1: 'B',
-  2: 'X',
-  3: 'Y',
-  4: 'LB',
-  5: 'RB',
-  6: 'LT',
-  7: 'RT',
-  8: 'Back',
-  9: 'Start',
-  10: 'LS',
-  11: 'RS',
-  12: 'Up',
-  13: 'Down',
-  14: 'Left',
-  15: 'Right',
+  0: 'B',
+  1: 'A',
+  2: 'Y',
+  3: 'X',
+  4: 'L',
+  5: 'R',
+  6: 'ZL',
+  7: 'ZR',
+  8: '−',
+  9: '+',
+  10: 'L stick',
+  11: 'R stick',
+  12: 'D-pad up',
+  13: 'D-pad down',
+  14: 'D-pad left',
+  15: 'D-pad right',
   16: 'Home',
 };
 
 // Gamepad axis names
 const GAMEPAD_AXIS_NAMES: Record<number, string> = {
-  0: 'L Stick Horizontal',
-  1: 'L Stick Vertical',
-  2: 'R Stick Horizontal',
-  3: 'R Stick Vertical',
+  0: 'Left stick horizontal',
+  1: 'Left stick vertical',
+  2: 'Right stick horizontal',
+  3: 'Right stick vertical',
 };
 
 // Key code to display name mapping
@@ -58,6 +64,10 @@ const KEY_CODE_NAMES: Record<string, string> = {
   'Numpad9': 'Num 9',
   'Numpad0': 'Num 0',
   'NumpadEnter': 'Num Enter',
+  'NumpadAdd': 'Num +',
+  'NumpadSubtract': 'Num −',
+  'NumpadMultiply': 'Num ×',
+  'NumpadDecimal': 'Num .',
   'Enter': 'Enter',
   'Space': 'Space',
   'ShiftLeft': 'Shift',
@@ -82,13 +92,15 @@ export function useInput() {
   const [gamepads, setGamepads] = useState<Gamepad[]>([]);
   const [listeningForInput, setListeningForInput] = useState<SmashInput | null>(null);
   const [listeningPlayerIndex, setListeningPlayerIndex] = useState<number | null>(null);
+  const [listeningDevice, setListeningDevice] = useState<InputDevice | null>(null);
 
   // Scan for connected gamepads periodically
   useEffect(() => {
     const checkGamepads = () => {
       const connectedGamepads = [];
-      for (let i = 0; i < navigator.getGamepads().length; i++) {
-        const gamepad = navigator.getGamepads()[i];
+      const availableGamepads = navigator.getGamepads?.() ?? [];
+      for (let i = 0; i < availableGamepads.length; i++) {
+        const gamepad = availableGamepads[i];
         if (gamepad) {
           connectedGamepads.push(gamepad);
         }
@@ -114,6 +126,7 @@ export function useInput() {
     if (!listeningForInput) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (listeningDevice && listeningDevice !== 'keyboard') return;
       e.preventDefault();
       e.stopPropagation();
       
@@ -132,6 +145,8 @@ export function useInput() {
     };
 
     const handleGamepadInput = () => {
+      if (listeningDevice && listeningDevice !== 'gamepad') return;
+
       for (const gamepad of gamepads) {
         // Check buttons
         for (let i = 0; i < gamepad.buttons.length; i++) {
@@ -174,21 +189,29 @@ export function useInput() {
       window.removeEventListener('keydown', handleKeyDown);
       clearInterval(gamepadCheckInterval);
     };
-  }, [listeningForInput, gamepads]);
+  }, [listeningForInput, listeningDevice, gamepads]);
 
-  const startListeningForInput = (input: SmashInput, playerIndex: number) => {
+  const startListeningForInput = (input: SmashInput, playerIndex: number, device?: InputDevice) => {
     setListeningForInput(input);
     setListeningPlayerIndex(playerIndex);
+    setListeningDevice(device ?? null);
   };
 
   const stopListeningForInput = () => {
     setListeningForInput(null);
     setListeningPlayerIndex(null);
+    setListeningDevice(null);
   };
 
   const getInputDisplayName = (binding: InputBinding): string => {
     if (binding.device === 'keyboard') {
-      return KEY_CODE_NAMES[binding.keyCode || ''] || binding.keyCode || 'Unknown';
+      const keyCode = binding.keyCode || '';
+      const fallback = keyCode.startsWith('Key')
+        ? keyCode.slice(3)
+        : keyCode.startsWith('Digit')
+          ? keyCode.slice(5)
+          : keyCode;
+      return KEY_CODE_NAMES[keyCode] || fallback || 'Unknown';
     } else if (binding.device === 'gamepad') {
       if (binding.buttonIndex !== undefined) {
         return GAMEPAD_BUTTON_NAMES[binding.buttonIndex] || `Button ${binding.buttonIndex}`;
@@ -201,22 +224,35 @@ export function useInput() {
     return 'Not Bound';
   };
 
-  const createKeybindsWithDefault = (existingKeybinds: PlayerKeybinds): PlayerKeybinds => {
-    const defaultKeybinds: PlayerKeybinds = {
-      up: { device: 'keyboard', keyCode: '' },
-      down: { device: 'keyboard', keyCode: '' },
-      left: { device: 'keyboard', keyCode: '' },
-      right: { device: 'keyboard', keyCode: '' },
-      jump: { device: 'keyboard', keyCode: '' },
-      attack: { device: 'keyboard', keyCode: '' },
-      special: { device: 'keyboard', keyCode: '' },
-      grab: { device: 'keyboard', keyCode: '' },
-      shield: { device: 'keyboard', keyCode: '' },
-      dodge: { device: 'keyboard', keyCode: '' },
-      taunt: { device: 'keyboard', keyCode: '' },
-      start: { device: 'keyboard', keyCode: '' },
+  const createKeybindsWithDefault = (
+    existingKeybinds: PlayerKeybinds,
+    playerIndex = 0,
+  ): PlayerKeybinds => {
+    const defaults: Record<InputDevice, PlayerKeybinds> = {
+      keyboard: playerIndex === 0 ? DEFAULT_KEYBINDS_KEYBOARD_P1 : DEFAULT_KEYBINDS_KEYBOARD_P2,
+      gamepad: DEFAULT_KEYBINDS_GAMEPAD,
     };
-    return { ...defaultKeybinds, ...existingKeybinds };
+    const bindings: PlayerKeybinds = {};
+
+    for (const input of SMASH_INPUTS) {
+      for (const device of ['keyboard', 'gamepad'] as const) {
+        const key = `${device}:${input}`;
+        const storedBinding = existingKeybinds[key];
+        const legacyBinding = existingKeybinds[input]?.device === device
+          ? existingKeybinds[input]
+          : undefined;
+        const oldTauntBinding = input === 'tauntUp' && existingKeybinds.taunt?.device === device
+          ? existingKeybinds.taunt
+          : undefined;
+
+        bindings[key] = storedBinding ?? legacyBinding ?? oldTauntBinding ?? defaults[device][input] ?? {
+          device,
+          keyCode: '',
+        };
+      }
+    }
+
+    return bindings;
   };
 
   return {

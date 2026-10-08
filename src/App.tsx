@@ -6,6 +6,7 @@ import KeybindsScreen from './screens/KeybindsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import OnlineScreen from './screens/OnlineScreen';
 import './App.css';
+import './styles/ultimate-theme.css';
 
 function App() {
   return (
