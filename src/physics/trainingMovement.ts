@@ -24,6 +24,20 @@ export const TRAINING_CAMERA_LIMITS = {
   bottom: worldUnits(-60),
   top: worldUnits(130),
 } as const;
+export const TRAINING_FIGHTER_COLLISION = {
+  height: worldUnits(18),
+  halfWidth: worldUnits(4),
+} as const;
+export const TRAINING_OMEGA_UNDERSIDE_PROFILE = [
+  { positionX: worldUnits(-80), positionY: worldUnits(-3.2) },
+  { positionX: worldUnits(-60.8), positionY: worldUnits(-20.8) },
+  { positionX: worldUnits(-41.6), positionY: worldUnits(-31.2) },
+  { positionX: worldUnits(-25.6), positionY: worldUnits(-40) },
+  { positionX: worldUnits(25.6), positionY: worldUnits(-40) },
+  { positionX: worldUnits(41.6), positionY: worldUnits(-31.2) },
+  { positionX: worldUnits(60.8), positionY: worldUnits(-20.8) },
+  { positionX: worldUnits(80), positionY: worldUnits(-3.2) },
+] as const;
 export const FULL_TILT_THRESHOLD = 0.94;
 export const DASH_CONTINUE_THRESHOLD = 0.75;
 
@@ -88,7 +102,15 @@ export interface TrainingCameraPosition {
 export function getTrainingCameraPosition(
   fighterX: WorldUnit,
   fighterY: WorldUnit,
+  followFighter = true,
 ): TrainingCameraPosition {
+  if (!followFighter) {
+    return {
+      positionX: worldUnits(0),
+      positionY: worldUnits(0),
+    };
+  }
+
   return {
     positionX: worldUnits(Math.max(
       Number(TRAINING_CAMERA_LIMITS.left),
@@ -99,6 +121,57 @@ export function getTrainingCameraPosition(
       Math.min(Number(TRAINING_CAMERA_LIMITS.top), Number(fighterY)),
     )),
   };
+}
+
+export function getTrainingPlatformUndersideAt(
+  positionX: WorldUnit,
+): WorldUnit | null {
+  const x = Number(positionX);
+  const firstPoint = TRAINING_OMEGA_UNDERSIDE_PROFILE[0];
+  const lastPoint =
+    TRAINING_OMEGA_UNDERSIDE_PROFILE[TRAINING_OMEGA_UNDERSIDE_PROFILE.length - 1];
+  if (x < Number(firstPoint.positionX) || x > Number(lastPoint.positionX)) return null;
+
+  for (let index = 0; index < TRAINING_OMEGA_UNDERSIDE_PROFILE.length - 1; index += 1) {
+    const start = TRAINING_OMEGA_UNDERSIDE_PROFILE[index];
+    const end = TRAINING_OMEGA_UNDERSIDE_PROFILE[index + 1];
+    if (x > Number(end.positionX)) continue;
+    const progress =
+      (x - Number(start.positionX))
+      / (Number(end.positionX) - Number(start.positionX));
+    return worldUnits(
+      Number(start.positionY)
+      + (Number(end.positionY) - Number(start.positionY)) * progress,
+    );
+  }
+
+  return lastPoint.positionY;
+}
+
+function getFighterUndersideCollisionAt(positionX: WorldUnit): WorldUnit | null {
+  const halfWidth = Number(TRAINING_FIGHTER_COLLISION.halfWidth);
+  const left = Number(positionX) - halfWidth;
+  const right = Number(positionX) + halfWidth;
+  const profileLeft = Number(TRAINING_OMEGA_UNDERSIDE_PROFILE[0].positionX);
+  const profileRight = Number(
+    TRAINING_OMEGA_UNDERSIDE_PROFILE[TRAINING_OMEGA_UNDERSIDE_PROFILE.length - 1]
+      .positionX,
+  );
+  const overlapLeft = Math.max(left, profileLeft);
+  const overlapRight = Math.min(right, profileRight);
+  if (overlapLeft > overlapRight) return null;
+
+  const candidates = [
+    Number(getTrainingPlatformUndersideAt(worldUnits(overlapLeft))),
+    Number(getTrainingPlatformUndersideAt(worldUnits(overlapRight))),
+    ...TRAINING_OMEGA_UNDERSIDE_PROFILE
+      .filter((point) => (
+        Number(point.positionX) >= overlapLeft
+        && Number(point.positionX) <= overlapRight
+      ))
+      .map((point) => Number(point.positionY)),
+  ];
+  return worldUnits(Math.max(...candidates));
 }
 
 export function createInitialTrainingMovementState(): TrainingMovementState {
@@ -321,6 +394,29 @@ function advanceVerticalMovement(
       Number(airborneState.velocityY) - Number(CAPTAIN_FALCON_MOVEMENT.gravity),
     );
     positionY = Number(airborneState.positionY) + velocityY;
+  }
+
+  const platformUndersideY =
+    velocityY > 0 ? getFighterUndersideCollisionAt(airborneState.positionX) : null;
+  const previousFighterTop =
+    Number(airborneState.positionY) + Number(TRAINING_FIGHTER_COLLISION.height);
+  const nextFighterTop = positionY + Number(TRAINING_FIGHTER_COLLISION.height);
+  if (
+    platformUndersideY !== null
+    && previousFighterTop <= Number(platformUndersideY)
+    && nextFighterTop >= Number(platformUndersideY)
+  ) {
+    return {
+      ...airborneState,
+      positionY: worldUnits(
+        Number(platformUndersideY) - Number(TRAINING_FIGHTER_COLLISION.height),
+      ),
+      velocityY: unitsPerFrame(0),
+      isGrounded: false,
+      isFastFalling: false,
+      shortHopRequested: false,
+      jumpInitialFramesRemaining: 0,
+    };
   }
 
   if (!airborneState.isGrounded && Number(airborneState.positionY) > 0 && positionY <= 0 && supported) {
