@@ -1462,3 +1462,220 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Ergonomic authoring controls */
+.fd-editor :focus-visible {
+  outline: 3px solid rgba(8, 127, 150, 0.62);
+  outline-offset: 2px;
+}
+
+.fd-save-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.fd-save-shortcut {
+  color: #76869a;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.fd-save-shortcut kbd {
+  padding: 2px 4px;
+  border: 1px solid #cbd5df;
+  border-radius: 3px;
+  background: #f8fafc;
+  color: #465970;
+  font: inherit;
+}
+
+.fd-frame-nav {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.fd-frame-nav .fd-button {
+  min-height: 44px;
+  color: #334b60;
+}
+
+.fd-frame-nav .fd-button:disabled {
+  opacity: 0.4;
+}
+
+.fd-hurtbox-endpoint {
+  cursor: grab;
+}
+
+.fd-hurtbox-endpoint:active {
+  cursor: grabbing;
+}
+
+.fd-hurtbox-hit-target {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 1;
+  pointer-events: all;
+  cursor: grab;
+  touch-action: none;
+}
+
+.fd-hurtbox-hit-target:focus-visible {
+  fill: rgba(255, 255, 255, 0.28);
+  stroke: #173349;
+  stroke-width: 1.5;
+}
+
+.fd-hurtbox-handle {
+  pointer-events: none;
+  transition: r 120ms ease, stroke-width 120ms ease;
+}
+
+.fd-hurtbox-endpoint.is-selected .fd-hurtbox-handle {
+  stroke: #173349;
+  stroke-width: 2;
+}
+
+.fd-hurtbox-endpoint text {
+  pointer-events: none;
+  font-weight: 700;
+}
+
+.fd-canvas-note {
+  align-items: flex-start;
+  color: #53677b;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.fd-number-field {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.fd-number-field .fd-axis-label {
+  color: #52677c;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1;
+  text-align: left;
+}
+
+.fd-endpoint-label {
+  align-self: end;
+  padding-bottom: 14px;
+  color: #31475d;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.fd-point-row .fd-number-input {
+  min-height: 44px;
+  padding: 7px 8px;
+  font-size: 0.78rem;
+}
+
+.fd-inline-control small {
+  color: #8492a0;
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.fd-switch {
+  min-width: 48px;
+  min-height: 36px;
+  width: 48px;
+  height: 36px;
+  padding: 7px;
+}
+
+.fd-switch::after {
+  width: 20px;
+  height: 20px;
+}
+
+.fd-switch[aria-checked='true']::after {
+  transform: translateX(12px);
+}
+
+.fd-sil-point-row {
+  grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1fr) 32px;
+  align-items: end;
+}
+
+.fd-sil-point-row .fd-axis-label {
+  font-size: 0.67rem;
+}
+
+.fd-sil-point-row .fd-number-input {
+  min-height: 44px;
+  font-size: 0.76rem;
+}
+
+.fd-sil-point-row .fd-mini-button {
+  min-height: 44px;
+  align-self: end;
+}
+
+.fd-mini-button,
+.fd-pan-pad button,
+.fd-tool-toggle {
+  min-height: 44px;
+}
+
+.fd-viewport-nav .fd-mini-button {
+  min-width: 44px;
+  height: 44px;
+  font-size: 0.8rem;
+}
+
+.fd-pan-pad button {
+  min-width: 44px;
+  height: 44px;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 760px) {
+  .fd-save-meta {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .fd-frame-nav {
+    width: 100%;
+  }
+
+  .fd-frame-nav .fd-button {
+    flex: 1;
+  }
+}
+
+@media (max-width: 520px) {
+  .fd-save-shortcut {
+    font-size: 0.64rem;
+  }
+
+  .fd-canvas-note {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .fd-point-row {
+    grid-template-columns: 25px repeat(3, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .fd-point-row .fd-number-input {
+    min-height: 42px;
+    padding-inline: 4px;
+    font-size: 0.73rem;
+  }
+}

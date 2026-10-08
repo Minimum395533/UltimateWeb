@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ChangeEvent,
+  KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from 'react';
@@ -50,7 +51,7 @@ const safeNumber = (value: string, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(-COORDINATE_LIMIT, Math.min(COORDINATE_LIMIT, parsed)) : fallback;
 };
-const formatCoordinate = (value: number) => Number.isInteger(value) ? String(value) : value.toFixed(1);
+const formatCoordinate = (value: number) => String(value);
 const isGif = (mediaType: string, fileName: string) => (
   mediaType.toLowerCase().includes('gif') || fileName.toLowerCase().endsWith('.gif')
 );
@@ -62,27 +63,32 @@ function pointString(point: SilhouettePoint) {
 function NumberField({
   value,
   label,
+  axisLabel,
   step = 0.1,
   onChange,
   className = '',
 }: {
   value: number;
   label: string;
+  axisLabel?: string;
   step?: number;
   onChange: (value: number) => void;
   className?: string;
 }) {
   return (
-    <input
-      aria-label={label}
-      className={`fd-number-input ${className}`}
-      type="number"
-      step={step}
-      min={-COORDINATE_LIMIT}
-      max={COORDINATE_LIMIT}
-      value={formatCoordinate(value)}
-      onChange={(event) => onChange(safeNumber(event.currentTarget.value, value))}
-    />
+    <label className={`fd-number-field${axisLabel ? ' has-axis-label' : ''}`}>
+      {axisLabel && <span className="fd-axis-label">{axisLabel}</span>}
+      <input
+        aria-label={label}
+        className={`fd-number-input ${className}`}
+        type="number"
+        step={step}
+        min={-COORDINATE_LIMIT}
+        max={COORDINATE_LIMIT}
+        value={formatCoordinate(value)}
+        onChange={(event) => onChange(safeNumber(event.currentTarget.value, value))}
+      />
+    </label>
   );
 }
 
@@ -114,9 +120,11 @@ const FrameDataEditor = () => {
   const [showHurtboxes, setShowHurtboxes] = useState(true);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
+  const [selectedEndpoint, setSelectedEndpoint] = useState<string | null>(null);
   const revision = useRef(0);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const draggingPoint = useRef<string | null>(null);
+  const draggingEndpoint = useRef<{ hurtboxId: string; endpoint: 'start' | 'end' } | null>(null);
   const suppressCanvasClick = useRef(false);
   const referenceUrlRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -223,7 +231,7 @@ const FrameDataEditor = () => {
     setError(null);
   };
 
-  const saveDraft = async () => {
+  const saveDraft = useCallback(async () => {
     if (!draft || saveState === 'saving') return;
     const capturedRevision = revision.current;
     const captured = structuredClone(draft);
@@ -250,7 +258,7 @@ const FrameDataEditor = () => {
       setSaveMessage('Save failed');
       setError(saveError instanceof Error ? saveError.message : 'Could not save this draft.');
     }
-  };
+  }, [draft, saveState]);
 
   const removeDraft = async () => {
     if (!draft) return;
@@ -300,6 +308,17 @@ const FrameDataEditor = () => {
     setSelectedPointId(null);
   };
 
+  const navigateFrame = useCallback((direction: -1 | 1) => {
+    if (!draft || !activeFrame) return;
+    const currentIndex = draft.frames.findIndex((frame) => frame.id === activeFrame.id);
+    const nextFrame = draft.frames[currentIndex + direction];
+    if (!nextFrame) return;
+    setActiveFrameId(nextFrame.id);
+    setSelectedPointId(null);
+    setSelectedEndpoint(null);
+    setAddingPoint(false);
+  }, [draft, activeFrame]);
+
   const addHurtbox = () => {
     if (!activeFrame || activeFrame.hurtboxes.length >= HURTBOX_LIMIT) return;
     const box = createEmptyHurtbox();
@@ -341,8 +360,8 @@ const FrameDataEditor = () => {
     const localX = (viewX - VIEW.width / 2 - viewPan.x) / viewZoom + VIEW.width / 2;
     const localY = (viewY - VIEW.height / 2 - viewPan.y) / viewZoom + VIEW.height / 2;
     return {
-      x: Math.max(-COORDINATE_LIMIT, Math.min(COORDINATE_LIMIT, localX / 10 - 24)),
-      y: Math.max(-COORDINATE_LIMIT, Math.min(COORDINATE_LIMIT, 28 - localY / 10)),
+      x: Math.max(-COORDINATE_LIMIT, Math.min(COORDINATE_LIMIT, Number((localX / 10 - 24).toFixed(1)))),
+      y: Math.max(-COORDINATE_LIMIT, Math.min(COORDINATE_LIMIT, Number((28 - localY / 10).toFixed(1)))),
     };
   };
 
@@ -363,18 +382,71 @@ const FrameDataEditor = () => {
     svgRef.current.setPointerCapture(event.pointerId);
   };
 
+  const handleEndpointPointerDown = (
+    event: ReactPointerEvent<SVGCircleElement>,
+    hurtboxId: string,
+    endpoint: 'start' | 'end',
+  ) => {
+    event.stopPropagation();
+    event.preventDefault();
+    if (!svgRef.current) return;
+    draggingEndpoint.current = { hurtboxId, endpoint };
+    suppressCanvasClick.current = true;
+    setSelectedEndpoint(`${hurtboxId}:${endpoint}`);
+    svgRef.current.setPointerCapture(event.pointerId);
+  };
+
+  const handleEndpointKeyDown = (
+    event: ReactKeyboardEvent<SVGCircleElement>,
+    hurtboxId: string,
+    endpoint: 'start' | 'end',
+  ) => {
+    const movementByKey: Record<string, { x: number; y: number }> = {
+      ArrowLeft: { x: -1, y: 0 },
+      ArrowRight: { x: 1, y: 0 },
+      ArrowUp: { x: 0, y: 1 },
+      ArrowDown: { x: 0, y: -1 },
+    };
+    const movement = movementByKey[event.key];
+    if (!movement) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const step = event.shiftKey ? 1 : 0.1;
+    setSelectedEndpoint(`${hurtboxId}:${endpoint}`);
+    updateHurtbox(hurtboxId, (hurtbox) => {
+      const point = hurtbox[endpoint];
+      return {
+        ...hurtbox,
+        [endpoint]: {
+          ...point,
+          x: Math.max(-COORDINATE_LIMIT, Math.min(COORDINATE_LIMIT, Number((point.x + movement.x * step).toFixed(1)))),
+          y: Math.max(-COORDINATE_LIMIT, Math.min(COORDINATE_LIMIT, Number((point.y + movement.y * step).toFixed(1)))),
+        },
+      };
+    });
+  };
+
   const handleCanvasPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (!draggingPoint.current) return;
+    if (!draggingPoint.current && !draggingEndpoint.current) return;
     const coordinates = svgCoordinates(event);
-    const pointId = draggingPoint.current;
-    updateSilhouette((silhouette) => ({
-      ...silhouette,
-      points: silhouette.points.map((point) => point.id === pointId ? { ...point, ...coordinates } : point),
-    }));
+    if (draggingPoint.current) {
+      const pointId = draggingPoint.current;
+      updateSilhouette((silhouette) => ({
+        ...silhouette,
+        points: silhouette.points.map((point) => point.id === pointId ? { ...point, ...coordinates } : point),
+      }));
+    } else if (draggingEndpoint.current) {
+      const { hurtboxId, endpoint } = draggingEndpoint.current;
+      updateHurtbox(hurtboxId, (hurtbox) => ({
+        ...hurtbox,
+        [endpoint]: { ...hurtbox[endpoint], ...coordinates },
+      }));
+    }
   };
 
   const handleCanvasPointerUp = (event: ReactPointerEvent<SVGSVGElement>) => {
     draggingPoint.current = null;
+    draggingEndpoint.current = null;
     if (svgRef.current?.hasPointerCapture(event.pointerId)) {
       svgRef.current.releasePointerCapture(event.pointerId);
     }
@@ -536,6 +608,63 @@ const FrameDataEditor = () => {
     if (referenceUrlRef.current) URL.revokeObjectURL(referenceUrlRef.current);
   }, []);
 
+  useEffect(() => {
+    if (saveState !== 'dirty' && saveState !== 'saving' && saveState !== 'error') return undefined;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    const guardInternalNavigation = (event: MouseEvent) => {
+      if (!(event.target instanceof Element)) return;
+      const link = event.target.closest('a[href]');
+      if (!(link instanceof HTMLAnchorElement) || event.defaultPrevented) return;
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const destination = new URL(link.href, window.location.href);
+      if (
+        destination.origin !== window.location.origin
+        || destination.pathname === window.location.pathname
+      ) return;
+      if (!window.confirm('Leave the movement editor? Unsaved changes will be lost.')) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    document.addEventListener('click', guardInternalNavigation, true);
+    return () => {
+      window.removeEventListener('beforeunload', warnBeforeUnload);
+      document.removeEventListener('click', guardInternalNavigation, true);
+    };
+  }, [saveState]);
+
+  useEffect(() => {
+    const handleKeyboardShortcuts = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        if (draft && saveState !== 'saved' && saveState !== 'saving' && draft.name.trim()) {
+          void saveDraft();
+        }
+        return;
+      }
+      if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        const tagName = target.tagName.toLowerCase();
+        if (
+          tagName === 'input'
+          || tagName === 'textarea'
+          || tagName === 'select'
+          || target.isContentEditable
+        ) return;
+      }
+      event.preventDefault();
+      navigateFrame(event.key === 'ArrowLeft' ? -1 : 1);
+    };
+    window.addEventListener('keydown', handleKeyboardShortcuts);
+    return () => window.removeEventListener('keydown', handleKeyboardShortcuts);
+  }, [draft, saveState, saveDraft, navigateFrame]);
+
   const stepGif = (direction: -1 | 1) => {
     if (!gifFrames?.length) return;
     setGifPlaying(false);
@@ -680,7 +809,10 @@ const FrameDataEditor = () => {
                   </div>
                   <div className="fd-save-row">
                     <span className={`fd-save-state ${saveStateClass}`} role="status">{saveMessage}</span>
-                    <span className="fd-save-state">DRAFT · SCHEMA {draft.schemaVersion}</span>
+                    <span className="fd-save-meta">
+                      <span className="fd-save-shortcut"><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>S</kbd> to save</span>
+                      <span className="fd-save-state">Development draft</span>
+                    </span>
                   </div>
                 </section>
 
@@ -691,6 +823,10 @@ const FrameDataEditor = () => {
                       <h2>Frame sequence <span className="fd-count">{draft.frames.length}</span></h2>
                     </div>
                     <div className="fd-frame-actions">
+                      <div className="fd-frame-nav" role="group" aria-label="Frame navigation">
+                        <button className="fd-button" type="button" onClick={() => navigateFrame(-1)} disabled={!activeFrame || draft.frames[0]?.id === activeFrame.id} aria-label="Previous frame">← Previous</button>
+                        <button className="fd-button" type="button" onClick={() => navigateFrame(1)} disabled={!activeFrame || draft.frames[draft.frames.length - 1]?.id === activeFrame.id} aria-label="Next frame">Next →</button>
+                      </div>
                       <button className="fd-button" type="button" onClick={addFrame} disabled={draft.frames.length >= FRAME_LIMIT}>+ Add frame</button>
                       <button className="fd-button" type="button" onClick={duplicateFrame} disabled={!activeFrame || draft.frames.length >= FRAME_LIMIT}>Duplicate</button>
                       <button className="fd-button fd-button-danger" type="button" onClick={removeFrame} disabled={draft.frames.length <= 1}>Remove</button>
@@ -764,7 +900,7 @@ const FrameDataEditor = () => {
                           ref={svgRef}
                           className={`fd-canvas${addingPoint ? ' is-adding' : ''}`}
                           viewBox={`0 0 ${VIEW.width} ${VIEW.height}`}
-                          role="img"
+                          role="group"
                           aria-label="X and Y Smash unit grid with reference image, presentation silhouette and projected hurtbox capsules"
                           onPointerMove={handleCanvasPointerMove}
                           onPointerUp={handleCanvasPointerUp}
@@ -853,9 +989,40 @@ const FrameDataEditor = () => {
                                   strokeWidth="1.5"
                                   opacity=".95"
                                 />
-                                <circle className="fd-hurtbox-handle" cx={unitToX(hurtbox.start.x)} cy={unitToY(hurtbox.start.y)} r="3.6" fill={color} />
-                                <circle className="fd-hurtbox-handle" cx={unitToX(hurtbox.end.x)} cy={unitToY(hurtbox.end.y)} r="3.6" fill={color} />
-                                <text x={unitToX(hurtbox.start.x) + 6} y={unitToY(hurtbox.start.y) - 5} fill={color} fontSize="7" fontFamily="DM Mono, monospace">{`HB${index + 1}`}</text>
+                                {(['start', 'end'] as const).map((endpoint) => {
+                                  const point = hurtbox[endpoint];
+                                  const endpointKey = `${hurtbox.id}:${endpoint}`;
+                                  const endpointLabel = endpoint === 'start' ? 'A' : 'B';
+                                  return (
+                                    <g className={`fd-hurtbox-endpoint${selectedEndpoint === endpointKey ? ' is-selected' : ''}`} key={endpoint}>
+                                      <circle
+                                        className="fd-hurtbox-hit-target"
+                                        cx={unitToX(point.x)}
+                                        cy={unitToY(point.y)}
+                                        r="11"
+                                        onPointerDown={(event) => handleEndpointPointerDown(event, hurtbox.id, endpoint)}
+                                        onKeyDown={(event) => handleEndpointKeyDown(event, hurtbox.id, endpoint)}
+                                        onClick={(event) => {
+                                          suppressCanvasClick.current = false;
+                                          event.stopPropagation();
+                                        }}
+                                        onFocus={() => setSelectedEndpoint(endpointKey)}
+                                        tabIndex={0}
+                                        role="button"
+                                        aria-label={`Capsule ${index + 1} endpoint ${endpointLabel}, X ${formatCoordinate(point.x)}, Y ${formatCoordinate(point.y)}. Drag to reposition. Use arrow keys to move 0.1 units, or Shift plus an arrow key to move 1 unit.`}
+                                      />
+                                      <circle
+                                        className="fd-hurtbox-handle"
+                                        cx={unitToX(point.x)}
+                                        cy={unitToY(point.y)}
+                                        r={selectedEndpoint === endpointKey ? 5 : 3.8}
+                                        fill={color}
+                                      />
+                                      <text x={unitToX(point.x) + 6} y={unitToY(point.y) - 5} fill={color} fontSize="7" fontFamily="DM Mono, monospace">{endpointLabel}</text>
+                                    </g>
+                                  );
+                                })}
+                                <text x={(unitToX(hurtbox.start.x) + unitToX(hurtbox.end.x)) / 2 + 6} y={(unitToY(hurtbox.start.y) + unitToY(hurtbox.end.y)) / 2 - 5} fill={color} fontSize="7" fontFamily="DM Mono, monospace">{`HB${index + 1}`}</text>
                               </g>
                             );
                           })}
@@ -869,7 +1036,10 @@ const FrameDataEditor = () => {
                                 r={selectedPointId === point.id ? 4.3 : 3.2}
                                 fill={activeFrame.silhouette.color}
                                 onPointerDown={(event) => handlePointPointerDown(event, point.id)}
-                                onClick={(event) => event.stopPropagation()}
+                                onClick={(event) => {
+                                  suppressCanvasClick.current = false;
+                                  event.stopPropagation();
+                                }}
                                 onFocus={() => setSelectedPointId(point.id)}
                                 tabIndex={0}
                                 role="button"
@@ -885,8 +1055,8 @@ const FrameDataEditor = () => {
                         </svg>
                       </div>
                       <div className="fd-canvas-note">
-                        <span>Projected to XY · Z remains editable per endpoint</span>
-                        <strong>1 unit / grid interval</strong>
+                        <span>Drag endpoint A/B to move X/Y · arrows move 0.1 u, Shift + arrow moves 1 u</span>
+                        <strong>1 grid interval = 1 unit (u)</strong>
                       </div>
                       <div className="fd-reference-controls">
                         <label className="fd-control">
@@ -913,7 +1083,7 @@ const FrameDataEditor = () => {
                     <aside className="fd-inspector fd-panel" aria-label="Frame geometry controls">
                       <div className="fd-inspector-head">
                         <span className="fd-section-kicker">FRAME {String(activeFrame.frameNumber).padStart(2, '0')} · GEOMETRY</span>
-                        <p>Capsule endpoints are 3D coordinates. This viewport shows their XY projection.</p>
+                        <p>Coordinates and radius use Smash units (u). The viewport shows X/Y; edit Z precisely in the fields.</p>
                       </div>
 
                       <section className="fd-inspector-section">
@@ -930,11 +1100,12 @@ const FrameDataEditor = () => {
                               </div>
                               <div className="fd-box-body">
                                 <div className="fd-point-row">
-                                  <span className="fd-axis-label">A</span>
+                                  <span className="fd-endpoint-label">A</span>
                                   {(['x', 'y', 'z'] as const).map((axis) => (
                                     <NumberField
                                       key={axis}
                                       label={`Capsule ${index + 1} endpoint A ${axis.toUpperCase()}`}
+                                      axisLabel={axis.toUpperCase()}
                                       value={hurtbox.start[axis]}
                                       onChange={(value) => updateHurtbox(hurtbox.id, (current) => ({
                                         ...current, start: { ...current.start, [axis]: value },
@@ -943,11 +1114,12 @@ const FrameDataEditor = () => {
                                   ))}
                                 </div>
                                 <div className="fd-point-row">
-                                  <span className="fd-axis-label">B</span>
+                                  <span className="fd-endpoint-label">B</span>
                                   {(['x', 'y', 'z'] as const).map((axis) => (
                                     <NumberField
                                       key={axis}
                                       label={`Capsule ${index + 1} endpoint B ${axis.toUpperCase()}`}
+                                      axisLabel={axis.toUpperCase()}
                                       value={hurtbox.end[axis]}
                                       onChange={(value) => updateHurtbox(hurtbox.id, (current) => ({
                                         ...current, end: { ...current.end, [axis]: value },
@@ -957,7 +1129,7 @@ const FrameDataEditor = () => {
                                 </div>
                                 <div className="fd-radius-vulnerability">
                                   <label className="fd-inline-control">
-                                    <span>Radius</span>
+                                    <span>Radius <small>(u)</small></span>
                                     <input
                                       className="fd-number-input"
                                       type="number"
@@ -1025,10 +1197,10 @@ const FrameDataEditor = () => {
                             {activeFrame.silhouette.points.map((point, index) => (
                               <div className={`fd-sil-point-row${point.id === selectedPointId ? ' is-selected' : ''}`} key={point.id}>
                                 <span className="fd-point-number">{String(index + 1).padStart(2, '0')}</span>
-                                <NumberField label={`Silhouette point ${index + 1} X`} value={point.x} onChange={(x) => updateSilhouette((silhouette) => ({
+                                <NumberField label={`Silhouette point ${index + 1} X`} axisLabel="X" value={point.x} onChange={(x) => updateSilhouette((silhouette) => ({
                                   ...silhouette, points: silhouette.points.map((current) => current.id === point.id ? { ...current, x } : current),
                                 }))} />
-                                <NumberField label={`Silhouette point ${index + 1} Y`} value={point.y} onChange={(y) => updateSilhouette((silhouette) => ({
+                                <NumberField label={`Silhouette point ${index + 1} Y`} axisLabel="Y" value={point.y} onChange={(y) => updateSilhouette((silhouette) => ({
                                   ...silhouette, points: silhouette.points.map((current) => current.id === point.id ? { ...current, y } : current),
                                 }))} />
                                 <button className="fd-mini-button is-danger" type="button" aria-label={`Remove silhouette point ${index + 1}`} onClick={() => removeSilhouettePoint(point.id)}>×</button>
