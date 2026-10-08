@@ -17,7 +17,14 @@ export interface PlayerProfile {
   characterId: string;
   colorIndex: number;
   keybinds: PlayerKeybinds;
+  controllerSettings?: PlayerControllerSettings;
   isReady: boolean;
+}
+
+export interface PlayerControllerSettings {
+  stickJumpEnabled: boolean;
+  /** 0–100. Higher values allow a longer fast-flick recognition window. */
+  stickSensitivity: number;
 }
 
 export interface Character {

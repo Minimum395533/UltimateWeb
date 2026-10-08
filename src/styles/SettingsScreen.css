@@ -125,6 +125,40 @@
   color: var(--input-text);
 }
 
+.setting-checkbox {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--accent-color);
+  cursor: pointer;
+}
+
+.sensitivity-control {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: min(420px, 60%);
+}
+
+.sensitivity-range {
+  flex: 1;
+  accent-color: var(--accent-color);
+  cursor: pointer;
+}
+
+.sensitivity-control output {
+  min-width: 130px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  text-align: right;
+}
+
+.controller-setting-help {
+  margin: -12px 0 4px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
   .setting-row {
@@ -136,5 +170,9 @@
   .setting-input {
     width: 100%;
     max-width: 100%;
+  }
+
+  .sensitivity-control {
+    width: 100%;
   }
 }

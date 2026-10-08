@@ -1,11 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameState } from '../hooks/useGameState';
+import {
+  getFastInputWindowFrames,
+  normalizeControllerSettings,
+} from '../physics/controllerSettings';
 import '../styles/SettingsScreen.css';
 
 const SettingsScreen: React.FC = () => {
   const navigate = useNavigate();
-  const { state, updateGameSettings } = useGameState();
+  const {
+    state,
+    updateGameSettings,
+    updatePlayerControllerSettings,
+  } = useGameState();
+  const [manualControllerPlayer, setManualControllerPlayer] = useState<number | null>(null);
+  const controllerPlayerIndex = manualControllerPlayer ?? state.selectedPlayerIndex ?? 0;
+  const controllerPlayer = state.players[controllerPlayerIndex] ?? state.players[0];
+  const controllerSettings = normalizeControllerSettings(controllerPlayer?.controllerSettings);
 
   const handleBack = () => {
     navigate('/');
@@ -24,6 +36,16 @@ const SettingsScreen: React.FC = () => {
   const handleDamageRatioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value) || 1.0;
     updateGameSettings({ damageRatio: Math.max(0.1, Math.min(3.0, value)) });
+  };
+
+  const updateControllerSettings = (
+    updates: Partial<typeof controllerSettings>,
+  ) => {
+    if (!controllerPlayer) return;
+    updatePlayerControllerSettings(controllerPlayerIndex, {
+      ...controllerSettings,
+      ...updates,
+    });
   };
 
   return (
@@ -94,6 +116,57 @@ const SettingsScreen: React.FC = () => {
 
         <div className="settings-section">
           <h2>Controls</h2>
+          <div className="setting-row">
+            <label htmlFor="controller-player">Controller profile</label>
+            <select
+              id="controller-player"
+              className="setting-input"
+              value={controllerPlayerIndex}
+              onChange={(event) => setManualControllerPlayer(Number(event.target.value))}
+            >
+              {state.players.map((player, index) => (
+                <option key={player.id} value={index}>{player.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="setting-row">
+            <label htmlFor="stick-jump">Stick Jump</label>
+            <input
+              id="stick-jump"
+              className="setting-checkbox"
+              type="checkbox"
+              checked={controllerSettings.stickJumpEnabled}
+              onChange={(event) => updateControllerSettings({
+                stickJumpEnabled: event.target.checked,
+              })}
+            />
+          </div>
+          <p className="controller-setting-help">
+            When enabled, tilting the left stick up emits the jump input. Jump motion is not part of this training test.
+          </p>
+          <div className="setting-row sensitivity-setting">
+            <label htmlFor="stick-sensitivity">Stick Sensitivity</label>
+            <div className="sensitivity-control">
+              <input
+                id="stick-sensitivity"
+                className="sensitivity-range"
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value={controllerSettings.stickSensitivity}
+                onChange={(event) => updateControllerSettings({
+                  stickSensitivity: Number(event.target.value),
+                })}
+              />
+              <output htmlFor="stick-sensitivity">
+                {controllerSettings.stickSensitivity}% · {getFastInputWindowFrames(controllerSettings)} frames
+              </output>
+            </div>
+          </div>
+          <p className="controller-setting-help">
+            Higher sensitivity allows more time for a quick stick flick to register as a dash. The same setting is ready for future attack-input recognition.
+          </p>
           <p>Rebind every keyboard and controller input in Button Settings.</p>
           <button
             type="button"

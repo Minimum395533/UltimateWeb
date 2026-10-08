@@ -4,7 +4,10 @@ import type {
   PlayerProfile,
   GameSettings,
   PlayerKeybinds,
+  PlayerControllerSettings,
 } from '../types';
+import { DEFAULT_CONTROLLER_SETTINGS, normalizeControllerSettings } from '../physics/controllerSettings';
+import { loadAppState, saveAppState } from '../state/appStateStorage';
 import { 
   DEFAULT_KEYBINDS_KEYBOARD_P1,
   DEFAULT_KEYBINDS_KEYBOARD_P2,
@@ -17,6 +20,7 @@ const initialPlayers: PlayerProfile[] = [
     characterId: 'captain_falcon',
     colorIndex: 0,
     keybinds: DEFAULT_KEYBINDS_KEYBOARD_P1,
+    controllerSettings: { ...DEFAULT_CONTROLLER_SETTINGS },
     isReady: false,
   },
   {
@@ -25,6 +29,7 @@ const initialPlayers: PlayerProfile[] = [
     characterId: 'captain_falcon',
     colorIndex: 1,
     keybinds: DEFAULT_KEYBINDS_KEYBOARD_P2,
+    controllerSettings: { ...DEFAULT_CONTROLLER_SETTINGS },
     isReady: false,
   },
 ];
@@ -47,19 +52,12 @@ export function useGameState() {
 
   // Load state from localStorage on initial load
   useEffect(() => {
-    const savedState = localStorage.getItem('ultimateWebState');
-    if (savedState) {
-      try {
-        setState(JSON.parse(savedState));
-      } catch (e) {
-        console.error('Failed to load saved state:', e);
-      }
-    }
+    setState(loadAppState(localStorage, initialState));
   }, []);
 
   // Save state to localStorage whenever it changes
   useEffect(() => {
-    localStorage.setItem('ultimateWebState', JSON.stringify(state));
+    saveAppState(localStorage, state);
   }, [state]);
 
   const navigateTo = (screen: AppState['currentScreen']) => {
@@ -88,6 +86,15 @@ export function useGameState() {
 
   const updatePlayerKeybinds = (playerIndex: number, keybinds: PlayerKeybinds) => {
     updatePlayer(playerIndex, { keybinds });
+  };
+
+  const updatePlayerControllerSettings = (
+    playerIndex: number,
+    controllerSettings: PlayerControllerSettings,
+  ) => {
+    updatePlayer(playerIndex, {
+      controllerSettings: normalizeControllerSettings(controllerSettings),
+    });
   };
 
   const togglePlayerReady = (playerIndex: number) => {
@@ -144,6 +151,7 @@ export function useGameState() {
     updatePlayerCharacter,
     updatePlayerColor,
     updatePlayerKeybinds,
+    updatePlayerControllerSettings,
     togglePlayerReady,
     setPlayerReady,
     selectPlayerForEdit,
