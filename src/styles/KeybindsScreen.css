@@ -1,0 +1,347 @@
+/* Keybinds Screen Styles */
+
+.keybinds-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 40px;
+  position: relative;
+}
+
+/* Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 40px;
+  width: 100%;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.header h1 {
+  font-family: var(--font-title);
+  font-size: clamp(1.8rem, 5vw, 2.5rem);
+  font-weight: 900;
+  color: var(--accent-color);
+  text-shadow: 
+    0 0 10px var(--glow-color),
+    2px 2px 0px var(--accent-secondary);
+  letter-spacing: 4px;
+}
+
+.back-button {
+  background: transparent;
+  border: 2px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.back-button:hover {
+  background: var(--highlight-color);
+  border-color: var(--accent-color);
+  color: var(--text-primary);
+}
+
+.header-spacer {
+  width: 60px;
+}
+
+/* Content */
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  flex: 1;
+}
+
+/* Player Tabs */
+.player-tabs {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.player-tab {
+  padding: 12px 32px;
+  background: var(--button-bg);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: bold;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 1px;
+}
+
+.player-tab:hover {
+  background: var(--button-hover);
+  border-color: var(--highlight-color);
+}
+
+.player-tab.active {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  color: white;
+  box-shadow: 0 0 15px var(--glow-color);
+}
+
+/* Sections */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  background: rgba(26, 26, 58, 0.7);
+  border: 2px solid var(--border-color);
+  border-radius: 16px;
+}
+
+.section h2 {
+  font-family: var(--font-title);
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: var(--accent-color);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+/* Name Edit */
+.name-edit {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.name-input {
+  flex: 1;
+  background: var(--input-bg);
+  border: 2px solid var(--input-border);
+  color: var(--input-text);
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+.name-input:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.2);
+}
+
+/* Device Selector */
+.device-selector {
+  display: flex;
+  gap: 20px;
+}
+
+.device-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.device-option input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent-color);
+  cursor: pointer;
+}
+
+.device-option span {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.device-option input[type="radio"]:checked + span {
+  color: var(--text-primary);
+}
+
+/* Keybinds Instructions */
+.keybinds-instructions {
+  padding: 12px 16px;
+  background: rgba(0, 102, 204, 0.1);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.keybinds-instructions p {
+  margin: 0;
+}
+
+.listening-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 12px 16px;
+  background: rgba(255, 102, 0, 0.1);
+  border: 1px solid var(--accent-secondary);
+  border-radius: 8px;
+  animation: listeningPulse 1s ease-in-out infinite;
+}
+
+@keyframes listeningPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.pulse {
+  width: 12px;
+  height: 12px;
+  background: var(--accent-secondary);
+  border-radius: 50%;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.7; }
+}
+
+.cancel-bind {
+  background: transparent;
+  border: 1px solid var(--danger-color);
+  color: var(--danger-color);
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  margin-left: auto;
+}
+
+.cancel-bind:hover {
+  background: var(--danger-color);
+  color: white;
+}
+
+/* Keybinds Grid */
+.keybinds-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.keybind-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--button-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.keybind-row:hover {
+  background: var(--button-hover);
+}
+
+.input-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.binding-button {
+  padding: 8px 16px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--text-primary);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+  text-align: center;
+}
+
+.binding-button:hover {
+  border-color: var(--accent-color);
+  background: rgba(0, 102, 204, 0.1);
+}
+
+.binding-button.editing {
+  background: rgba(255, 102, 0, 0.2);
+  border-color: var(--accent-secondary);
+  animation: editingPulse 0.5s ease-in-out infinite;
+}
+
+@keyframes editingPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Reset Section */
+.reset-section {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.reset-button {
+  background: transparent;
+  border: 2px solid var(--warning-color);
+  color: var(--warning-color);
+  padding: 10px 24px;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.reset-button:hover {
+  background: var(--warning-color);
+  color: black;
+}
+
+/* Responsive */
+@media (max-width: 800px) {
+  .keybinds-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .device-selector {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 600px) {
+  .keybinds-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .keybind-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .binding-button {
+    width: 100%;
+  }
+
+  .name-edit {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .name-input {
+    width: 100%;
+  }
+}

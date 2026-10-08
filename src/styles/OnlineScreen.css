@@ -1,0 +1,109 @@
+/* Online Screen Styles */
+
+.online-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 40px;
+  position: relative;
+}
+
+/* Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 40px;
+  width: 100%;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.header h1 {
+  font-family: var(--font-title);
+  font-size: clamp(1.8rem, 5vw, 2.5rem);
+  font-weight: 900;
+  color: var(--accent-color);
+  text-shadow: 
+    0 0 10px var(--glow-color),
+    2px 2px 0px var(--accent-secondary);
+  letter-spacing: 4px;
+}
+
+.back-button {
+  background: transparent;
+  border: 2px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.back-button:hover {
+  background: var(--highlight-color);
+  border-color: var(--accent-color);
+  color: var(--text-primary);
+}
+
+.header-spacer {
+  width: 60px;
+}
+
+/* Content */
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-align: center;
+}
+
+.coming-soon {
+  max-width: 600px;
+  padding: 40px;
+  background: rgba(26, 26, 58, 0.7);
+  border: 2px solid var(--border-color);
+  border-radius: 16px;
+}
+
+.coming-soon h2 {
+  font-family: var(--font-title);
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--accent-secondary);
+  letter-spacing: 2px;
+  margin-bottom: 20px;
+  text-transform: uppercase;
+}
+
+.coming-soon p {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  line-height: 1.8;
+  margin-bottom: 20px;
+}
+
+.coming-soon ul {
+  list-style: none;
+  text-align: left;
+}
+
+.coming-soon li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.coming-soon li:last-child {
+  border-bottom: none;
+}
+
+.coming-soon li::before {
+  content: '•';
+  color: var(--accent-secondary);
+  margin-right: 12px;
+  font-size: 1.2rem;
+}

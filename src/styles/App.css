@@ -1,0 +1,9 @@
+/* App-specific styles */
+
+.app {
+  background: var(--primary-bg);
+  min-height: 100vh;
+}
+
+/* Screen transitions */
+/* We'll add smooth transitions between screens later */
