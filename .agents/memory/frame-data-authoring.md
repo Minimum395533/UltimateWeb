@@ -1,12 +1,18 @@
 ---
 name: Frame data authoring
-description: Data staging and approval policy for movement frame data.
+description: Data sourcing, staging, and approval policy for Captain Falcon frame data and animations.
 ---
 
-The first frame-data tool phase is for Captain Falcon movement hurtboxes and visual silhouettes across all current movement states; offensive attacks are deferred. The editor is development/preview-only, and drafts belong in Replit's development PostgreSQL database. Use two 3D capsule endpoints plus radius, a side-view X/Y unit grid, numeric Z per endpoint, and still/GIF frame references.
+The editor is development/preview-only. Drafts live in Replit's development PostgreSQL database. Hurtboxes and hitboxes are 3D capsules (two endpoints plus a radius), edited on a side-view X/Y unit grid with numeric Z, traced over still/GIF/WebP references.
 
-Do not move draft data into source-controlled gameplay data until the user explicitly approves the specific records in chat.
+Hand-drawn shapes (hurtboxes, hitbox positions, silhouettes) stay drafts until the user explicitly approves the specific animations in chat. Only then are they promoted to source-controlled game data.
 
-**Why:** the user specified development-database staging, all movement states without attacks, and chat approval as the gate for making data definitive.
+Published SmashWiki numbers (damage, frame timings, angles, knockback, stats) go directly into game data, with the source cited. They don't need approval.
 
-**How to apply:** retain unapproved data as drafts; promote only the named, approved clips into source data.
+Every animation has a fixed frame count; the editor shows exactly that many frames. When the wiki doesn't publish a count (walk/run/idle cycles), research the best available value, mark it unconfirmed, and have the user confirm it.
+
+Animation visuals have no gameplay effect, so approximate drafts are acceptable. The user may still adjust ones that feel off.
+
+**Why:** the user set these rules: development-database staging, chat approval for shapes, wiki numbers in directly with citations, and researched frame counts that the user confirms.
+
+**How to apply:** never promote unapproved shapes. Cite the wiki source for every number. Flag unconfirmed frame counts in the editor.
