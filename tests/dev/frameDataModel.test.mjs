@@ -118,6 +118,7 @@ test('cloned frames get independent frame, hurtbox, and visual point identities'
 test('movement selector includes all current grounded and aerial states', () => {
   assert.deepEqual(MOVEMENT_STATES.map(({ id }) => id), [
     'idle',
+    'idle-variance',
     'walk',
     'initial-dash',
     'run',

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type {
   ChangeEvent,
   KeyboardEvent as ReactKeyboardEvent,
@@ -14,6 +15,7 @@ import {
   cloneMovementFrame,
   replaceMovementFrame,
 } from '../../dev/frameDataModel';
+import { isAnimatedWebp } from '../../dev/webpAnimation';
 import {
   createMovementDraft,
   deleteMovementDraft,
@@ -60,6 +62,20 @@ const formatCoordinate = (value: number) => String(value);
 const isGif = (mediaType: string, fileName: string) => (
   mediaType.toLowerCase().includes('gif') || fileName.toLowerCase().endsWith('.gif')
 );
+const isWebp = (mediaType: string, fileName: string) => (
+  mediaType.toLowerCase().includes('webp') || fileName.toLowerCase().endsWith('.webp')
+);
+
+type AnimatedReference = {
+  format: 'GIF';
+  frames: ParsedFrame[];
+  width: number;
+  height: number;
+} | {
+  format: 'WEBP';
+  decoder: ImageDecoder;
+  frameCount: number;
+};
 
 function pointString(point: SilhouettePoint) {
   return `${unitToX(point.x)},${unitToY(point.y)}`;
@@ -98,6 +114,7 @@ function NumberField({
 }
 
 const FrameDataEditor = () => {
+  const navigate = useNavigate();
   const [drafts, setDrafts] = useState<MovementFrameDraft[]>([]);
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   const [draft, setDraft] = useState<MovementFrameDraft | null>(null);
@@ -113,10 +130,10 @@ const FrameDataEditor = () => {
   const [referenceUrl, setReferenceUrl] = useState<string | null>(null);
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const [referenceOpacity, setReferenceOpacity] = useState(0.45);
-  const [gifFrames, setGifFrames] = useState<ParsedFrame[] | null>(null);
-  const [gifDimensions, setGifDimensions] = useState({ width: 0, height: 0 });
-  const [gifIndex, setGifIndex] = useState(0);
-  const [gifPlaying, setGifPlaying] = useState(false);
+  const [animatedReference, setAnimatedReference] = useState<AnimatedReference | null>(null);
+  const [animationFrameIndex, setAnimationFrameIndex] = useState(0);
+  const [animationPlaying, setAnimationPlaying] = useState(false);
+  const [webpFrameDuration, setWebpFrameDuration] = useState(100);
   const [showGrid, setShowGrid] = useState(true);
   const [showSilhouette, setShowSilhouette] = useState(true);
   const [showHurtboxes, setShowHurtboxes] = useState(true);
@@ -126,6 +143,8 @@ const FrameDataEditor = () => {
   const revision = useRef(0);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const draggingPoint = useRef<string | null>(null);
+  const webpDecoderRef = useRef<ImageDecoder | null>(null);
+  const webpDecodeRequestRef = useRef(0);
   const draggingEndpoint = useRef<{ hurtboxId: string; endpoint: 'start' | 'end' } | null>(null);
   const draggingReference = useRef<{
     clientX: number;
@@ -257,7 +276,7 @@ const FrameDataEditor = () => {
   };
 
   const saveDraft = useCallback(async () => {
-    if (!draft || saveState === 'saving') return;
+    if (!draft || saveState === 'saving') return false;
     const capturedRevision = revision.current;
     const captured = structuredClone(draft);
     setSaveState('saving');
@@ -275,16 +294,25 @@ const FrameDataEditor = () => {
         setDraft(structuredClone(saved));
         setSaveState('saved');
         setSaveMessage('Saved to dev database');
+        return true;
       } else {
         setSaveState('dirty');
         setSaveMessage('Newer edits still need saving');
+        return false;
       }
     } catch (saveError) {
       setSaveState('error');
       setSaveMessage('Save failed');
       setError(saveError instanceof Error ? saveError.message : 'Could not save this draft.');
+      return false;
     }
   }, [draft, saveState]);
+
+  const testDraftInTraining = async () => {
+    if (!draft || saveState === 'saving') return;
+    if (saveState !== 'saved' && !(await saveDraft())) return;
+    navigate(`/training?previewDraft=${encodeURIComponent(draft.id)}`);
+  };
 
   const removeDraft = async () => {
     if (!draft) return;
@@ -567,8 +595,9 @@ const FrameDataEditor = () => {
         referenceAssetId: null,
       } : current);
       markDirty();
-      setGifFrames(null);
-      setGifIndex(0);
+      setAnimatedReference(null);
+      setAnimationFrameIndex(0);
+      setAnimationPlaying(false);
       setSaveMessage('Reference removed · save draft to persist');
     } catch (deleteError) {
       setReferenceError(deleteError instanceof Error ? deleteError.message : 'Could not remove this reference.');
@@ -585,8 +614,10 @@ const FrameDataEditor = () => {
     let ownedUrl: string | null = null;
     setReferenceError(null);
     setReferenceUrl(null);
-    setGifFrames(null);
-    setGifIndex(0);
+    setAnimatedReference(null);
+    setAnimationFrameIndex(0);
+    setAnimationPlaying(false);
+    setWebpFrameDuration(100);
     if (!referenceDraftId || !referenceAssetId || !referenceMediaType || !referenceFileName) return undefined;
     getMovementReference(referenceDraftId, referenceAssetId)
       .then(async (blob) => {
@@ -596,9 +627,47 @@ const FrameDataEditor = () => {
           const frames = decompressFrames(parsed, true);
           if (!frames.length) throw new Error('This GIF contains no displayable frames.');
           if (!alive) return;
-          setGifDimensions({ width: parsed.lsd.width, height: parsed.lsd.height });
-          setGifFrames(frames);
+          setAnimatedReference({
+            format: 'GIF',
+            frames,
+            width: parsed.lsd.width,
+            height: parsed.lsd.height,
+          });
           return;
+        }
+        if (isWebp(referenceMediaType, referenceFileName) && await isAnimatedWebp(blob)) {
+          if (typeof ImageDecoder === 'undefined') {
+            throw new Error('Animated WebP frame stepping requires a browser with WebCodecs ImageDecoder support.');
+          }
+          if (!await ImageDecoder.isTypeSupported('image/webp')) {
+            throw new Error('This browser cannot decode animated WebP references.');
+          }
+          const decoder = new ImageDecoder({
+            data: await blob.arrayBuffer(),
+            type: 'image/webp',
+            preferAnimation: true,
+          });
+          try {
+            await decoder.tracks.ready;
+            if (!alive) {
+              decoder.close();
+              return;
+            }
+            const track = decoder.tracks.selectedTrack;
+            if (track?.animated && track.frameCount > 1) {
+              webpDecoderRef.current = decoder;
+              setAnimatedReference({
+                format: 'WEBP',
+                decoder,
+                frameCount: track.frameCount,
+              });
+              return;
+            }
+            decoder.close();
+          } catch (decodeError) {
+            decoder.close();
+            throw decodeError;
+          }
         }
         ownedUrl = URL.createObjectURL(blob);
         referenceUrlRef.current = ownedUrl;
@@ -609,29 +678,34 @@ const FrameDataEditor = () => {
       });
     return () => {
       alive = false;
+      webpDecodeRequestRef.current += 1;
+      if (webpDecoderRef.current) {
+        webpDecoderRef.current.close();
+        webpDecoderRef.current = null;
+      }
       if (ownedUrl) URL.revokeObjectURL(ownedUrl);
       if (referenceUrlRef.current === ownedUrl) referenceUrlRef.current = null;
     };
   }, [referenceDraftId, referenceAssetId, referenceMediaType, referenceFileName]);
 
   useEffect(() => {
-    if (!gifFrames?.length || !gifDimensions.width || !gifDimensions.height) return;
-    const frame = gifFrames[gifIndex];
+    if (animatedReference?.format !== 'GIF') return;
+    const frame = animatedReference.frames[animationFrameIndex];
     if (!frame) return;
     const canvas = document.createElement('canvas');
-    canvas.width = gifDimensions.width;
-    canvas.height = gifDimensions.height;
+    canvas.width = animatedReference.width;
+    canvas.height = animatedReference.height;
     const context = canvas.getContext('2d');
     if (!context) return;
     let restoreFrame: ImageData | null = null;
-    for (let index = 0; index <= gifIndex; index += 1) {
-      const previous = gifFrames[index - 1];
+    for (let index = 0; index <= animationFrameIndex; index += 1) {
+      const previous = animatedReference.frames[index - 1];
       if (previous?.disposalType === 2) {
         context.clearRect(previous.dims.left, previous.dims.top, previous.dims.width, previous.dims.height);
       } else if (previous?.disposalType === 3 && restoreFrame) {
         context.putImageData(restoreFrame, 0, 0);
       }
-      const current = gifFrames[index];
+      const current = animatedReference.frames[index];
       if (current.disposalType === 3) {
         restoreFrame = context.getImageData(0, 0, canvas.width, canvas.height);
       } else {
@@ -646,17 +720,61 @@ const FrameDataEditor = () => {
       );
     }
     setReferenceUrl(canvas.toDataURL('image/png'));
-  }, [gifFrames, gifIndex, gifDimensions]);
+  }, [animatedReference, animationFrameIndex]);
 
   useEffect(() => {
-    if (!gifPlaying || !gifFrames?.length) return undefined;
-    const frame = gifFrames[gifIndex];
-    const duration = Math.max(40, (frame?.delay || 100) * 10);
+    if (animatedReference?.format !== 'WEBP') return undefined;
+    let alive = true;
+    const requestId = ++webpDecodeRequestRef.current;
+    const { decoder } = animatedReference;
+    void decoder.decode({
+      frameIndex: animationFrameIndex,
+      completeFramesOnly: true,
+    }).then(({ image }) => {
+      if (!alive || requestId !== webpDecodeRequestRef.current) {
+        image.close();
+        return;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = image.displayWidth || image.codedWidth;
+      canvas.height = image.displayHeight || image.codedHeight;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        image.close();
+        throw new Error('Could not create a canvas for the WebP frame.');
+      }
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const duration = Math.max(40, (image.duration ?? 100_000) / 1000);
+      image.close();
+      setWebpFrameDuration(duration);
+      setReferenceUrl(canvas.toDataURL('image/png'));
+    }).catch((decodeError: unknown) => {
+      if (!alive) return;
+      setAnimationPlaying(false);
+      setReferenceError(
+        decodeError instanceof Error ? decodeError.message : 'Could not decode this WebP frame.',
+      );
+    });
+    return () => {
+      alive = false;
+    };
+  }, [animatedReference, animationFrameIndex]);
+
+  const animatedFrameCount = animatedReference?.format === 'GIF'
+    ? animatedReference.frames.length
+    : animatedReference?.frameCount ?? 0;
+  const animatedFormat = animatedReference?.format ?? null;
+  const animationDelay = animatedReference?.format === 'GIF'
+    ? Math.max(40, (animatedReference.frames[animationFrameIndex]?.delay || 100) * 10)
+    : webpFrameDuration;
+
+  useEffect(() => {
+    if (!animationPlaying || !animatedReference || animatedFrameCount < 2) return undefined;
     const timer = window.setTimeout(() => {
-      setGifIndex((index) => (index + 1) % gifFrames.length);
-    }, duration);
+      setAnimationFrameIndex((index) => (index + 1) % animatedFrameCount);
+    }, animationDelay);
     return () => window.clearTimeout(timer);
-  }, [gifPlaying, gifFrames, gifIndex]);
+  }, [animationPlaying, animatedReference, animatedFrameCount, animationFrameIndex, animationDelay]);
 
   useEffect(() => () => {
     if (referenceUrlRef.current) URL.revokeObjectURL(referenceUrlRef.current);
@@ -849,6 +967,14 @@ const FrameDataEditor = () => {
                     />
                   </label>
                   <div className="fd-clip-actions">
+                    <button
+                      className="fd-button fd-button-primary"
+                      type="button"
+                      onClick={() => void testDraftInTraining()}
+                      disabled={saveState === 'saving' || !draft.name.trim()}
+                    >
+                      Test in training
+                    </button>
                     <button
                       className="fd-button fd-button-gold"
                       type="button"

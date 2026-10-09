@@ -34,10 +34,11 @@ test('development API persists frames and reference media then deletes the draft
   skip: !enabled,
 }, async (context) => {
   let draftId;
+  let idleVarianceDraftId;
   context.after(async () => {
-    if (draftId) {
-      await fetch(`${origin}/api/dev/frame-data/${draftId}`, { method: 'DELETE' });
-    }
+    await Promise.all([draftId, idleVarianceDraftId]
+      .filter(Boolean)
+      .map((id) => fetch(`${origin}/api/dev/frame-data/${id}`, { method: 'DELETE' })));
   });
   const createResponse = await fetch(`${origin}/api/dev/frame-data`, {
     method: 'POST',
@@ -55,6 +56,16 @@ test('development API persists frames and reference media then deletes the draft
     offsetY: 0,
     locked: true,
   });
+
+  const idleVarianceCreateResponse = await fetch(`${origin}/api/dev/frame-data`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ motionState: 'idle-variance' }),
+  });
+  assert.equal(idleVarianceCreateResponse.status, 201);
+  const idleVarianceDraft = await idleVarianceCreateResponse.json();
+  idleVarianceDraftId = idleVarianceDraft.id;
+  assert.equal(idleVarianceDraft.motionState, 'idle-variance');
 
   const firstFrame = {
     ...created.frames[0],

@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useGameState } from '../hooks/useGameState';
 import { DEFAULT_KEYBINDS_KEYBOARD_P1 } from '../types';
 import type { PlayerKeybinds } from '../types';
+import type { MovementFrameDraft, MovementState } from '../types/frameData';
 import { normalizeControllerSettings } from '../physics/controllerSettings';
 import {
   CAPTAIN_FALCON_MOVEMENT,
@@ -19,16 +20,38 @@ import {
 import type { TrainingMovementState } from '../physics/trainingMovement';
 import { readTrainingControlInput } from '../physics/trainingInput';
 import type { GamepadSnapshot } from '../physics/trainingInput';
+import {
+  INITIAL_MOVEMENT_ANIMATION_PREVIEW,
+  stepMovementAnimationPreview,
+} from '../dev/animationPreview';
+import type { MovementAnimationPreviewFrame } from '../dev/animationPreview';
 import '../styles/TrainingScreen.css';
 
 const TrainingScreen: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { state } = useGameState();
   const player = state.players[0];
+  const requestedPreviewId = import.meta.env.DEV
+    ? searchParams.get('previewDraft')
+    : null;
   const [movement, setMovement] = useState(createInitialTrainingMovementState);
   const [cameraFollowEnabled, setCameraFollowEnabled] = useState(true);
   const [stageZoom, setStageZoom] = useState<'blastzone' | 'camera'>('blastzone');
+  const [previewDraft, setPreviewDraft] = useState<MovementFrameDraft | null>(null);
+  const [previewDrafts, setPreviewDrafts] = useState<
+    Partial<Record<MovementState, MovementFrameDraft>>
+  >({});
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [animationPreview, setAnimationPreview] =
+    useState<MovementAnimationPreviewFrame | null>(null);
   const movementRef = useRef<TrainingMovementState>(createInitialTrainingMovementState());
+  const previewDraftsRef = useRef<Partial<Record<MovementState, MovementFrameDraft>>>({});
+  const previewDraftIdRef = useRef<string | null>(null);
+  const previewPlaybackRef = useRef(INITIAL_MOVEMENT_ANIMATION_PREVIEW);
+  const activeAnimationRef = useRef<MovementAnimationPreviewFrame | null>(null);
+  const forceIdleVarianceRef = useRef(false);
   const pressedKeys = useRef(new Set<string>());
   const newlyPressedKeys = useRef(new Set<string>());
   const bindingsRef = useRef<PlayerKeybinds>(DEFAULT_KEYBINDS_KEYBOARD_P1);
@@ -42,6 +65,60 @@ const TrainingScreen: React.FC = () => {
     bindingsRef.current = player?.keybinds ?? DEFAULT_KEYBINDS_KEYBOARD_P1;
     controllerSettingsRef.current = controllerSettings;
   }, [player?.keybinds, player?.controllerSettings, controllerSettings]);
+
+  useEffect(() => {
+    previewDraftIdRef.current = requestedPreviewId;
+    previewDraftsRef.current = {};
+    setPreviewDraft(null);
+    setPreviewDrafts({});
+    setPreviewError(null);
+    setAnimationPreview(null);
+    previewPlaybackRef.current = INITIAL_MOVEMENT_ANIMATION_PREVIEW;
+    activeAnimationRef.current = null;
+    forceIdleVarianceRef.current = false;
+
+    if (!import.meta.env.DEV || !requestedPreviewId) {
+      setPreviewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setPreviewLoading(true);
+    void import('../dev/frameDataClient')
+      .then(({ listMovementDrafts }) => listMovementDrafts())
+      .then((drafts) => {
+        if (cancelled) return;
+        const selectedDraft = drafts.find(({ id }) => id === requestedPreviewId);
+        if (!selectedDraft) {
+          throw new Error('This draft no longer exists. Reopen it from the frame-data editor.');
+        }
+
+        const draftMap: Partial<Record<MovementState, MovementFrameDraft>> = {};
+        for (const item of drafts) {
+          if (!draftMap[item.motionState]) draftMap[item.motionState] = item;
+        }
+        draftMap[selectedDraft.motionState] = selectedDraft;
+        previewDraftsRef.current = draftMap;
+        previewPlaybackRef.current = INITIAL_MOVEMENT_ANIMATION_PREVIEW;
+        setPreviewDrafts(draftMap);
+        setPreviewDraft(selectedDraft);
+      })
+      .catch((loadError: unknown) => {
+        if (cancelled) return;
+        setPreviewError(
+          loadError instanceof Error
+            ? loadError.message
+            : 'Could not load saved movement drafts.',
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedPreviewId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -102,6 +179,21 @@ const TrainingScreen: React.FC = () => {
             input,
             controllerSettingsRef.current,
           );
+          if (previewDraftIdRef.current) {
+            const previewStep = stepMovementAnimationPreview(
+              previewPlaybackRef.current,
+              movementRef.current,
+              previewDraftsRef.current,
+              Math.random,
+              forceIdleVarianceRef.current,
+            );
+            previewPlaybackRef.current = previewStep.playback;
+            activeAnimationRef.current = previewStep.animation;
+          } else {
+            previewPlaybackRef.current = INITIAL_MOVEMENT_ANIMATION_PREVIEW;
+            activeAnimationRef.current = null;
+          }
+          forceIdleVarianceRef.current = false;
           newlyPressedKeys.current.clear();
           accumulatedMilliseconds -= TRAINING_STEP_MILLISECONDS;
           steps += 1;
@@ -117,6 +209,7 @@ const TrainingScreen: React.FC = () => {
 
       previousTimestamp = timestamp;
       setMovement({ ...movementRef.current });
+      setAnimationPreview(activeAnimationRef.current);
       animationFrame = window.requestAnimationFrame(animate);
     };
 
@@ -124,7 +217,8 @@ const TrainingScreen: React.FC = () => {
     return () => window.cancelAnimationFrame(animationFrame);
   }, []);
 
-  const handleBack = () => navigate('/');
+  const isDraftPreview = import.meta.env.DEV && Boolean(requestedPreviewId);
+  const handleBack = () => navigate(isDraftPreview ? '/dev/frame-data' : '/');
   const fighterWorldX = Number(movement.positionX);
   const blastzoneWidth =
     Number(TRAINING_BLASTZONE_BOUNDS.right) - Number(TRAINING_BLASTZONE_BOUNDS.left);
@@ -167,7 +261,9 @@ const TrainingScreen: React.FC = () => {
   const fighterHeightPercent = worldToMapY(Number(movement.positionY));
   const speed = Math.abs(Number(movement.velocityX));
   const verticalSpeed = Math.abs(Number(movement.velocityY));
-  const modeLabel = movement.jumpSquatFramesRemaining > 0
+  const modeLabel = animationPreview?.motionState === 'idle-variance'
+    ? 'IDLE VARIANCE'
+    : movement.jumpSquatFramesRemaining > 0
     ? `JUMP SQUAT · ${movement.jumpSquatFramesRemaining}`
     : !movement.isGrounded
       ? Number(movement.velocityY) > 0
@@ -180,6 +276,16 @@ const TrainingScreen: React.FC = () => {
   const jumpsRemaining = Math.max(
     0,
     1 + CAPTAIN_FALCON_MOVEMENT.maxAirJumps - movement.jumpsUsed,
+  );
+  const draftSilhouette = animationPreview?.frame.silhouette;
+  const silhouettePoints = draftSilhouette?.points
+    .map(({ x, y }) => `${x},${-y}`)
+    .join(' ') ?? '';
+  const showDraftSilhouette = Boolean(
+    draftSilhouette && draftSilhouette.points.length >= 2,
+  );
+  const idleVarianceDraftAvailable = Boolean(
+    previewDrafts['idle-variance']?.frames.length,
   );
 
   return (
@@ -219,6 +325,51 @@ const TrainingScreen: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {isDraftPreview && (
+          <section className="training-draft-preview" aria-label="Development animation draft playtest">
+            <div className="training-draft-preview-copy">
+              <span className="training-preview-kicker">DEVELOPMENT DRAFT PLAYTEST</span>
+              <h3>{previewLoading ? 'Loading saved clips…' : previewDraft?.name ?? 'Draft preview unavailable'}</h3>
+              <p>
+                Temporary gameplay preview from the development database. These animations are
+                not approved or added to source-controlled game data.
+              </p>
+            </div>
+            <div className="training-draft-preview-actions">
+              <div className="training-preview-current" role="status" aria-live="polite">
+                <span>{previewError ? 'PREVIEW ERROR' : 'NOW PLAYING'}</span>
+                <strong>
+                  {previewError
+                    ? 'Draft could not be loaded'
+                    : previewLoading
+                      ? 'Loading draft data'
+                      : animationPreview
+                        ? `${animationPreview.motionState.toUpperCase()} · FRAME ${animationPreview.frame.frameNumber}/${animationPreview.draft.frames.length}`
+                        : 'No saved clip for the current state'}
+                </strong>
+                {previewError && <small>{previewError}</small>}
+              </div>
+              {idleVarianceDraftAvailable && (
+                <button
+                  className="training-play-variance-button"
+                  type="button"
+                  disabled={
+                    previewLoading
+                    || !movement.isGrounded
+                    || movement.mode !== 'idle'
+                    || animationPreview?.motionState === 'idle-variance'
+                  }
+                  onClick={() => {
+                    forceIdleVarianceRef.current = true;
+                  }}
+                >
+                  Play idle variance now
+                </button>
+              )}
+            </div>
+          </section>
+        )}
 
         <div className="stage-view-controls">
           <span className="stage-view-caption">STAGE VIEW</span>
@@ -298,14 +449,44 @@ const TrainingScreen: React.FC = () => {
               aria-hidden="true"
             />
             <div
-              className={`training-bean is-${movement.mode}${movement.isGrounded ? '' : ' is-airborne'}${movement.isFastFalling ? ' is-fast-falling' : ''}`}
+              className={`training-bean is-${movement.mode}${movement.isGrounded ? '' : ' is-airborne'}${movement.isFastFalling ? ' is-fast-falling' : ''}${showDraftSilhouette ? ' has-draft-silhouette' : ''}`}
               style={{
                 left: `${fighterPositionPercent}%`,
                 top: `${fighterHeightPercent}%`,
               }}
               role="img"
-              aria-label="Simple Captain Falcon movement prototype"
-            />
+              aria-label={showDraftSilhouette
+                ? `Movement draft preview: ${animationPreview?.draft.name ?? 'untitled'}`
+                : 'Simple Captain Falcon movement prototype'}
+            >
+              {showDraftSilhouette && draftSilhouette && (
+                <svg
+                  className="training-draft-silhouette"
+                  viewBox="-5 -19 10 20"
+                  preserveAspectRatio="none"
+                  aria-hidden="true"
+                >
+                  {draftSilhouette.closed ? (
+                    <polygon
+                      points={silhouettePoints}
+                      fill={draftSilhouette.color}
+                      stroke={draftSilhouette.color}
+                      strokeWidth="0.35"
+                      strokeLinejoin="round"
+                    />
+                  ) : (
+                    <polyline
+                      points={silhouettePoints}
+                      fill="none"
+                      stroke={draftSilhouette.color}
+                      strokeWidth="0.7"
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+                  )}
+                </svg>
+              )}
+            </div>
           </div>
           <span className="stage-blastzone-label">
             {stageZoom === 'blastzone' ? 'BLASTZONE' : 'CAMERA LIMITS'}

@@ -334,6 +334,110 @@
   color: #42d8ee;
 }
 
+.training-draft-preview {
+  display: flex;
+  width: min(100%, 820px);
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 auto 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(66, 216, 238, 0.42);
+  border-left: 3px solid #42d8ee;
+  border-radius: 10px;
+  background: rgba(8, 16, 27, 0.96);
+  text-align: left;
+}
+
+.training-draft-preview-copy {
+  min-width: 0;
+}
+
+.training-preview-kicker,
+.training-preview-current > span {
+  color: #42d8ee;
+  font-family: var(--font-title);
+  font-size: 0.64rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+}
+
+.training-draft-preview h3 {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+  color: #f1f5f9;
+  font-size: 0.95rem;
+}
+
+.training-draft-preview p {
+  max-width: 52ch;
+  margin: 0;
+  color: #aebacd;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.training-draft-preview-actions {
+  display: grid;
+  flex: 0 0 min(42%, 290px);
+  gap: 9px;
+}
+
+.training-preview-current {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.training-preview-current strong {
+  overflow-wrap: anywhere;
+  color: #e7eff7;
+  font-size: 0.75rem;
+}
+
+.training-preview-current small {
+  color: #ff9c91;
+  font-size: 0.68rem;
+}
+
+.training-play-variance-button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid rgba(66, 216, 238, 0.55);
+  border-radius: 7px;
+  background: rgba(66, 216, 238, 0.11);
+  color: #d7faff;
+  font-size: 0.72rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.training-play-variance-button:hover:not(:disabled) {
+  background: rgba(66, 216, 238, 0.2);
+}
+
+.training-play-variance-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.training-bean.has-draft-silhouette,
+.training-bean.has-draft-silhouette.is-airborne,
+.training-bean.has-draft-silhouette.is-fast-falling {
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  filter: none;
+  transition: none;
+}
+
+.training-draft-silhouette {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
 .training-instructions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -404,6 +508,15 @@
 
   .training-summary {
     align-items: flex-start;
+  }
+
+  .training-draft-preview {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .training-draft-preview-actions {
+    flex-basis: auto;
   }
 
   .movement-readout {
