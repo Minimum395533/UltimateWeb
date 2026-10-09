@@ -427,6 +427,7 @@ const FrameDataEditor = () => {
   };
 
   const handlePointPointerDown = (event: ReactPointerEvent<SVGCircleElement>, pointId: string) => {
+    if (addingPoint) return;
     event.stopPropagation();
     event.preventDefault();
     if (!svgRef.current) return;
@@ -441,6 +442,7 @@ const FrameDataEditor = () => {
     hurtboxId: string,
     endpoint: 'start' | 'end',
   ) => {
+    if (addingPoint) return;
     event.stopPropagation();
     event.preventDefault();
     if (!svgRef.current) return;
@@ -550,7 +552,6 @@ const FrameDataEditor = () => {
       points: [...silhouette.points, newPoint],
     }));
     setSelectedPointId(newPoint.id);
-    setAddingPoint(false);
   };
 
   const removeSilhouettePoint = (pointId: string) => {
@@ -1120,7 +1121,7 @@ const FrameDataEditor = () => {
                               onPointerDown={handleReferencePointerDown}
                               onClick={(event) => {
                                 suppressCanvasClick.current = false;
-                                event.stopPropagation();
+                                if (!addingPoint) event.stopPropagation();
                               }}
                             />
                           )}
@@ -1193,7 +1194,7 @@ const FrameDataEditor = () => {
                                         onKeyDown={(event) => handleEndpointKeyDown(event, hurtbox.id, endpoint)}
                                         onClick={(event) => {
                                           suppressCanvasClick.current = false;
-                                          event.stopPropagation();
+                                          if (!addingPoint) event.stopPropagation();
                                         }}
                                         onFocus={() => setSelectedEndpoint(endpointKey)}
                                         tabIndex={0}
@@ -1227,7 +1228,7 @@ const FrameDataEditor = () => {
                                 onPointerDown={(event) => handlePointPointerDown(event, point.id)}
                                 onClick={(event) => {
                                   suppressCanvasClick.current = false;
-                                  event.stopPropagation();
+                                  if (!addingPoint) event.stopPropagation();
                                 }}
                                 onFocus={() => setSelectedPointId(point.id)}
                                 tabIndex={0}
@@ -1238,7 +1239,7 @@ const FrameDataEditor = () => {
                             </g>
                           ))}
                           {addingPoint && (
-                            <text x="240" y="18" textAnchor="middle" fill="#087e95" fontSize="8" fontFamily="DM Mono, monospace">CLICK CANVAS TO PLACE POINT</text>
+                            <text x="240" y="18" textAnchor="middle" fill="#087e95" fontSize="8" fontFamily="DM Mono, monospace">CLICK TO ADD EACH POINT · CLICK MODE BUTTON TO FINISH</text>
                           )}
                           {referenceUrl && activeAsset && !referenceAlignment.locked && (
                             <rect
@@ -1486,10 +1487,12 @@ const FrameDataEditor = () => {
                             className={`fd-button${addingPoint ? ' fd-button-primary' : ''}`}
                             type="button"
                             aria-pressed={addingPoint}
+                            aria-label={addingPoint ? 'Stop adding silhouette points' : 'Start adding silhouette points'}
+                            title={addingPoint ? 'Point placement is on. Click the grid to add points, then select this button to finish.' : 'Turn on persistent point placement mode.'}
                             onClick={() => setAddingPoint((value) => !value)}
-                            disabled={activeFrame.silhouette.points.length >= SILHOUETTE_LIMIT}
+                            disabled={!addingPoint && activeFrame.silhouette.points.length >= SILHOUETTE_LIMIT}
                           >
-                            {addingPoint ? 'Click viewport…' : '+ Add point'}
+                            {addingPoint ? 'Adding points · Done' : '+ Add points'}
                           </button>
                           <button className="fd-button" type="button" onClick={() => updateSilhouette((silhouette) => ({ ...silhouette, closed: !silhouette.closed }))} aria-pressed={activeFrame.silhouette.closed}>
                             {activeFrame.silhouette.closed ? 'Closed' : 'Open path'}
