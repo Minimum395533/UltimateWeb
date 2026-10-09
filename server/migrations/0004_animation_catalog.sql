@@ -14,16 +14,24 @@ ALTER TABLE frame_data_drafts
   ADD CONSTRAINT frame_data_drafts_animation_id_check
     CHECK (animation_id ~ '^[a-z0-9][a-z0-9-]{0,62}$');
 
--- Keep the newest draft per animation, then enforce one working draft each.
-DELETE FROM frame_data_drafts older
- USING frame_data_drafts newer
+-- One working draft per animation. Older duplicates (the previous schema allowed
+-- several per movement state) are archived, not deleted, so their frames and
+-- uploaded references stay in the database. Archived rows are hidden from the
+-- editor; clear archived_at on a row (after archiving the current one) to restore it.
+ALTER TABLE frame_data_drafts
+  ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+
+UPDATE frame_data_drafts older
+   SET archived_at = NOW()
+  FROM frame_data_drafts newer
  WHERE older.character_id = newer.character_id
    AND older.animation_id = newer.animation_id
+   AND older.archived_at IS NULL
    AND (older.updated_at, older.id) < (newer.updated_at, newer.id);
 
-ALTER TABLE frame_data_drafts
-  ADD CONSTRAINT frame_data_drafts_character_animation_key
-    UNIQUE (character_id, animation_id);
+CREATE UNIQUE INDEX IF NOT EXISTS frame_data_drafts_active_animation_key
+  ON frame_data_drafts (character_id, animation_id)
+  WHERE archived_at IS NULL;
 
 -- Reference settings gain opacity and frame linking.
 ALTER TABLE frame_data_drafts

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
 import { createServer } from 'vite';
+import { ANIMATION_CATALOG } from '../../src/data/falcon/animationCatalog.ts';
+import { seedAnimationFrames } from '../../src/data/falcon/seedAnimation.ts';
 
 const enabled = process.env.FRAME_DATA_INTEGRATION_TEST === '1'
   && Boolean(process.env.DATABASE_URL);
@@ -12,11 +14,7 @@ before(async () => {
   vite = await createServer({
     configFile: 'vite.config.ts',
     logLevel: 'error',
-    server: {
-      host: '127.0.0.1',
-      port: 0,
-      strictPort: false,
-    },
+    server: { host: '127.0.0.1', port: 0, strictPort: false },
   });
   await vite.listen();
   const address = vite.httpServer?.address();
@@ -30,206 +28,132 @@ after(async () => {
   if (vite) await vite.close();
 });
 
-test('development API persists frames and reference media then deletes the draft', {
+const api = (path, init) => fetch(`${origin}/api/dev/frame-data${path}`, init);
+const json = (method, body) => ({
+  method,
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+});
+
+test('development API locks frame counts, persists drafts and per-animation references', {
   skip: !enabled,
 }, async (context) => {
+  // Use a catalog animation the user has not touched, so real work is never modified.
+  const drafts = await (await api('')).json();
+  const counts = await (await api('/frame-counts')).json();
+  const used = new Set([...drafts.map((draft) => draft.animationId), ...counts.map((count) => count.animationId)]);
+  const entry = [...ANIMATION_CATALOG].reverse().find((candidate) => !used.has(candidate.id));
+  assert.ok(entry, 'needs one catalog animation without a draft or confirmed count');
+
   let draftId;
-  let idleVarianceDraftId;
+  let countChanged = false;
   context.after(async () => {
-    await Promise.all([draftId, idleVarianceDraftId]
-      .filter(Boolean)
-      .map((id) => fetch(`${origin}/api/dev/frame-data/${id}`, { method: 'DELETE' })));
+    if (draftId) await api(`/${draftId}`, { method: 'DELETE' });
+    if (countChanged) await api(`/frame-counts/${entry.id}`, { method: 'DELETE' });
   });
-  const createResponse = await fetch(`${origin}/api/dev/frame-data`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ motionState: 'idle' }),
-  });
+
+  const frames = seedAnimationFrames(entry);
+
+  const wrongCount = await api('', json('POST', { animationId: entry.id, frames: frames.slice(1) }));
+  assert.equal(wrongCount.status, 400);
+  assert.match((await wrongCount.json()).error, /exactly/);
+
+  const unknown = await api('', json('POST', { animationId: 'not-an-animation', frames }));
+  assert.equal(unknown.status, 400);
+
+  const createResponse = await api('', json('POST', { animationId: entry.id, frames }));
   assert.equal(createResponse.status, 201);
   const created = await createResponse.json();
   draftId = created.id;
-  assert.equal(created.status, 'draft');
-  assert.equal(created.frames.length, 1);
-  assert.deepEqual(created.referenceAlignment, {
-    scale: 1,
-    offsetX: 0,
-    offsetY: 0,
-    locked: true,
-  });
+  assert.equal(created.animationId, entry.id);
+  assert.equal(created.frames.length, entry.frameCount);
+  assert.equal(created.referenceSettings.locked, true);
 
-  const idleVarianceCreateResponse = await fetch(`${origin}/api/dev/frame-data`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ motionState: 'idle-variance' }),
-  });
-  assert.equal(idleVarianceCreateResponse.status, 201);
-  const idleVarianceDraft = await idleVarianceCreateResponse.json();
-  idleVarianceDraftId = idleVarianceDraft.id;
-  assert.equal(idleVarianceDraft.motionState, 'idle-variance');
+  const duplicate = await api('', json('POST', { animationId: entry.id, frames }));
+  assert.equal(duplicate.status, 409);
 
-  const firstFrame = {
-    ...created.frames[0],
-    hurtboxes: [{
-      id: 'integration-capsule',
-      start: { x: -1, y: 2, z: -0.5 },
-      end: { x: 1, y: 15, z: 0.5 },
-      radius: 3.25,
-      isVulnerable: true,
-    }],
-    silhouette: {
-      color: '#5ce1e6',
-      closed: true,
-      points: [
-        { id: 'integration-point-1', x: -4, y: 0 },
-        { id: 'integration-point-2', x: 0, y: 18 },
-        { id: 'integration-point-3', x: 4, y: 0 },
-      ],
-    },
-  };
-  const secondFrame = {
-    ...created.frames[0],
-    id: 'integration-frame-2',
-    frameNumber: 2,
-    hurtboxes: [],
-    silhouette: {
-      ...created.frames[0].silhouette,
-      color: '#ffc400',
-    },
-  };
-  const updateResponse = await fetch(
-    `${origin}/api/dev/frame-data/${created.id}`,
-    {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: 'Captain Falcon · Idle',
-        frames: [firstFrame, secondFrame],
-        referenceAssetId: null,
-        referenceAlignment: {
-          scale: 1.35,
-          offsetX: 2.5,
-          offsetY: -1,
-          locked: false,
-        },
-      }),
-    },
-  );
+  const edited = structuredClone(created.frames);
+  edited[0].hurtboxes[0] = { ...edited[0].hurtboxes[0], radius: 3.25, state: 'invincible' };
+  const settings = { scale: 1.35, offsetX: 2.5, offsetY: -1, locked: false, opacity: 0.4, linkFrames: true };
+  const updateResponse = await api(`/${draftId}`, json('PUT', {
+    name: created.name,
+    frames: edited,
+    referenceAssetId: null,
+    referenceSettings: settings,
+  }));
   assert.equal(updateResponse.status, 200);
-  const updatedDraft = await updateResponse.json();
-  assert.deepEqual(updatedDraft.referenceAlignment, {
-    scale: 1.35,
-    offsetX: 2.5,
-    offsetY: -1,
-    locked: false,
-  });
+  const updated = await updateResponse.json();
+  assert.deepEqual(updated.referenceSettings, settings);
+  assert.equal(updated.frames[0].hurtboxes[0].state, 'invincible');
 
-  const invalidFrame = structuredClone(firstFrame);
-  invalidFrame.hurtboxes[0].radius = -1;
-  const invalidUpdateResponse = await fetch(
-    `${origin}/api/dev/frame-data/${created.id}`,
-    {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: 'Invalid draft',
-        frames: [invalidFrame, secondFrame],
-        referenceAssetId: null,
-      }),
-    },
-  );
-  assert.equal(invalidUpdateResponse.status, 400);
+  const trimmed = await api(`/${draftId}`, json('PUT', { name: created.name, frames: edited.slice(0, -1), referenceAssetId: null }));
+  assert.equal(trimmed.status, 400);
 
-  const invalidAlignmentResponse = await fetch(
-    `${origin}/api/dev/frame-data/${created.id}`,
-    {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: 'Captain Falcon · Idle',
-        frames: [firstFrame, secondFrame],
-        referenceAssetId: null,
-        referenceAlignment: {
-          scale: 4,
-          offsetX: 2.5,
-          offsetY: -1,
-          locked: false,
-        },
-      }),
-    },
-  );
-  assert.equal(invalidAlignmentResponse.status, 400);
+  const badSettings = await api(`/${draftId}`, json('PUT', {
+    name: created.name,
+    frames: edited,
+    referenceAssetId: null,
+    referenceSettings: { ...settings, scale: 4 },
+  }));
+  assert.equal(badSettings.status, 400);
 
-  const loadedResponse = await fetch(`${origin}/api/dev/frame-data/${created.id}`);
-  assert.equal(loadedResponse.status, 200);
-  const loaded = await loadedResponse.json();
-  assert.equal(loaded.frames[0].hurtboxes[0].radius, 3.25);
-  assert.equal(loaded.frames[0].hurtboxes[0].end.z, 0.5);
-  assert.deepEqual(loaded.frames[1].hurtboxes, []);
-  assert.equal(loaded.frames[0].silhouette.color, '#5ce1e6');
-  assert.equal(loaded.frames[1].silhouette.color, '#ffc400');
-  assert.deepEqual(loaded.referenceAlignment, {
-    scale: 1.35,
-    offsetX: 2.5,
-    offsetY: -1,
-    locked: false,
-  });
+  // Confirming a new count changes what the server accepts.
+  const confirmed = await api(`/frame-counts/${entry.id}`, json('PUT', { frameCount: entry.frameCount + 2 }));
+  assert.equal(confirmed.status, 200);
+  countChanged = true;
+  const oldLength = await api(`/${draftId}`, json('PUT', { name: created.name, frames: edited, referenceAssetId: null }));
+  assert.equal(oldLength.status, 400);
+  const longer = seedAnimationFrames(entry, entry.frameCount + 2);
+  const longerSave = await api(`/${draftId}`, json('PUT', { name: created.name, frames: longer, referenceAssetId: null }));
+  assert.equal(longerSave.status, 200);
+  assert.equal((await longerSave.json()).frames.length, entry.frameCount + 2);
+  await api(`/frame-counts/${entry.id}`, { method: 'DELETE' });
+  countChanged = false;
 
+  // Reference uploads stay with this animation; each new upload starts unlocked and re-aligned.
   const pngBytes = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/a6kAAAAASUVORK5CYII=',
     'base64',
   );
-  const pngUploadResponse = await fetch(
-    `${origin}/api/dev/frame-data/${created.id}/assets?fileName=still.png`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'image/png' },
-      body: pngBytes,
-    },
-  );
-  assert.equal(pngUploadResponse.status, 201);
-  const pngAsset = await pngUploadResponse.json();
-  assert.equal(pngAsset.mediaType, 'image/png');
-  const pngReferenceResponse = await fetch(
-    `${origin}/api/dev/frame-data/${created.id}/assets/${pngAsset.id}`,
-  );
-  assert.equal(pngReferenceResponse.status, 200);
-  assert.deepEqual(Buffer.from(await pngReferenceResponse.arrayBuffer()), pngBytes);
+  const pngUpload = await api(`/${draftId}/assets?fileName=still.png`, {
+    method: 'POST', headers: { 'Content-Type': 'image/png' }, body: pngBytes,
+  });
+  assert.equal(pngUpload.status, 201);
+  const pngAsset = await pngUpload.json();
 
   const gifBytes = Buffer.from('R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=', 'base64');
-  const uploadResponse = await fetch(
-    `${origin}/api/dev/frame-data/${created.id}/assets?fileName=frame.gif`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'image/gif' },
-      body: gifBytes,
-    },
-  );
-  assert.equal(uploadResponse.status, 201);
-  const asset = await uploadResponse.json();
-  assert.equal(asset.mediaType, 'image/gif');
+  const gifUpload = await api(`/${draftId}/assets?fileName=frame.gif`, {
+    method: 'POST', headers: { 'Content-Type': 'image/gif' }, body: gifBytes,
+  });
+  assert.equal(gifUpload.status, 201);
+  const gifAsset = await gifUpload.json();
 
-  const referenceResponse = await fetch(
-    `${origin}/api/dev/frame-data/${created.id}/assets/${asset.id}`,
-  );
-  assert.equal(referenceResponse.status, 200);
-  assert.deepEqual(Buffer.from(await referenceResponse.arrayBuffer()), gifBytes);
+  const gifContent = await api(`/${draftId}/assets/${gifAsset.id}`);
+  assert.equal(gifContent.status, 200);
+  assert.deepEqual(Buffer.from(await gifContent.arrayBuffer()), gifBytes);
 
-  const savedAfterUpload = await fetch(`${origin}/api/dev/frame-data/${created.id}`);
-  const draftAfterUpload = await savedAfterUpload.json();
-  assert.equal(draftAfterUpload.referenceAssetId, asset.id);
-  assert.equal(draftAfterUpload.assets.length, 2);
-  assert.deepEqual(draftAfterUpload.referenceAlignment, {
-    scale: 1,
-    offsetX: 0,
-    offsetY: 0,
-    locked: true,
+  const afterUpload = await (await api(`/${draftId}`)).json();
+  assert.equal(afterUpload.referenceAssetId, gifAsset.id);
+  assert.equal(afterUpload.assets.length, 2);
+  assert.deepEqual(afterUpload.referenceSettings, {
+    scale: 1, offsetX: 0, offsetY: 0, locked: false, opacity: 0.4, linkFrames: true,
   });
 
-  const deleteResponse = await fetch(`${origin}/api/dev/frame-data/${created.id}`, {
-    method: 'DELETE',
-  });
+  // Switch back to the earlier upload.
+  const switched = await api(`/${draftId}`, json('PUT', {
+    name: created.name, frames, referenceAssetId: pngAsset.id,
+  }));
+  assert.equal(switched.status, 200);
+  assert.equal((await switched.json()).referenceAssetId, pngAsset.id);
+
+  const removeAsset = await api(`/${draftId}/assets/${pngAsset.id}`, { method: 'DELETE' });
+  assert.equal(removeAsset.status, 200);
+  const afterRemove = await (await api(`/${draftId}`)).json();
+  assert.equal(afterRemove.referenceAssetId, null);
+  assert.equal(afterRemove.assets.length, 1);
+
+  const deleteResponse = await api(`/${draftId}`, { method: 'DELETE' });
   assert.equal(deleteResponse.status, 200);
   draftId = undefined;
-  const missingResponse = await fetch(`${origin}/api/dev/frame-data/${created.id}`);
-  assert.equal(missingResponse.status, 404);
+  assert.equal((await api(`/${created.id}`)).status, 404);
 });

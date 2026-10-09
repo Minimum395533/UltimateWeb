@@ -381,6 +381,38 @@ export function trimFramesToCount(frames: AnimationFrame[], frameCount: number):
   return frames.slice(0, frameCount).map((frame, index) => ({ ...frame, frameNumber: index + 1 }));
 }
 
+export interface FrameCountChange {
+  frames: AnimationFrame[];
+  /** Stored extra frames brought back into the animation. */
+  restored: number;
+  /** Copies of the last frame appended past every stored frame. */
+  added: number;
+  /** Frames (visible or stored extras) that would be removed. Needs user confirmation. */
+  dropped: number;
+}
+
+/**
+ * Plans a change to `count` frames for a draft whose visible frames may be
+ * followed by stored extra frames. Stored frames are always reused first;
+ * copies are added only past the last stored frame, and anything removed is
+ * reported so the caller can ask before dropping it.
+ */
+export function planFrameCountChange(
+  visible: AnimationFrame[],
+  extra: AnimationFrame[],
+  count: number,
+): FrameCountChange {
+  const stored = [...visible, ...extra].map((frame, index) => (
+    frame.frameNumber === index + 1 ? frame : { ...frame, frameNumber: index + 1 }
+  ));
+  const restored = Math.max(0, Math.min(count, stored.length) - visible.length);
+  if (count >= stored.length) {
+    const normalized = normalizeFrameCount(stored, count);
+    return { frames: normalized.frames, restored, added: normalized.padded, dropped: 0 };
+  }
+  return { frames: trimFramesToCount(stored, count), restored, added: 0, dropped: stored.length - count };
+}
+
 // ---------------------------------------------------------------------------
 // Cloning
 // ---------------------------------------------------------------------------

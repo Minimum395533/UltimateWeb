@@ -259,7 +259,7 @@ async function getDraft(
   const result = await pool.query<DraftRow>(
     `SELECT ${DRAFT_COLUMNS}
        FROM frame_data_drafts
-      WHERE id = $1`,
+      WHERE id = $1 AND archived_at IS NULL`,
     [draftId],
   );
   const row = result.rows[0];
@@ -278,6 +278,7 @@ async function listDrafts(pool: Pool): Promise<AnimationDraft[]> {
   const draftResult = await pool.query<DraftRow>(
     `SELECT ${DRAFT_COLUMNS}
        FROM frame_data_drafts
+      WHERE archived_at IS NULL
       ORDER BY animation_id ASC`,
   );
   if (draftResult.rows.length === 0) return [];
@@ -382,7 +383,7 @@ async function handleRequest(
       `INSERT INTO frame_data_drafts
          (id, character_id, animation_id, name, schema_version, status, frames, reference_settings)
        VALUES ($1, $2, $3, $4, $5, 'draft', $6::jsonb, $7::jsonb)
-       ON CONFLICT (character_id, animation_id) DO NOTHING
+       ON CONFLICT (character_id, animation_id) WHERE archived_at IS NULL DO NOTHING
        RETURNING ${DRAFT_COLUMNS}`,
       [
         id,
@@ -430,7 +431,7 @@ async function handleRequest(
       return;
     }
     const existing = await pool.query<{ animation_id: string }>(
-      'SELECT animation_id FROM frame_data_drafts WHERE id = $1',
+      'SELECT animation_id FROM frame_data_drafts WHERE id = $1 AND archived_at IS NULL',
       [draftId],
     );
     const animationId = existing.rows[0]?.animation_id;
@@ -475,7 +476,7 @@ async function handleRequest(
       `UPDATE frame_data_drafts
           SET name = $1, frames = $2::jsonb, reference_asset_id = $3,
               reference_settings = COALESCE($4::jsonb, reference_settings), updated_at = NOW()
-        WHERE id = $5
+        WHERE id = $5 AND archived_at IS NULL
         RETURNING ${DRAFT_COLUMNS}`,
       [
         name,
@@ -495,7 +496,7 @@ async function handleRequest(
 
   if (segments.length === 1 && request.method === 'DELETE') {
     const result = await pool.query(
-      'DELETE FROM frame_data_drafts WHERE id = $1 RETURNING id',
+      'DELETE FROM frame_data_drafts WHERE id = $1 AND archived_at IS NULL RETURNING id',
       [draftId],
     );
     if (result.rowCount === 0) {
@@ -531,7 +532,7 @@ async function handleRequest(
     try {
       await client.query('BEGIN');
       const draftResult = await client.query(
-        'SELECT id FROM frame_data_drafts WHERE id = $1 FOR UPDATE',
+        'SELECT id FROM frame_data_drafts WHERE id = $1 AND archived_at IS NULL FOR UPDATE',
         [draftId],
       );
       if (draftResult.rowCount === 0) {
@@ -555,7 +556,7 @@ async function handleRequest(
                 reference_settings = reference_settings || $3::jsonb,
                 updated_at = NOW()
           WHERE id = $2`,
-        [assetId, draftId, JSON.stringify({ scale: 1, offsetX: 0, offsetY: 0, locked: true })],
+        [assetId, draftId, JSON.stringify({ scale: 1, offsetX: 0, offsetY: 0, locked: false })],
       );
       await client.query('COMMIT');
       sendJson(response, 201, toAssetMetadata(assetResult.rows[0]));
@@ -602,6 +603,7 @@ async function handleRequest(
       const result = await client.query(
         `DELETE FROM frame_data_reference_assets
           WHERE id = $1 AND draft_id = $2
+            AND EXISTS (SELECT 1 FROM frame_data_drafts WHERE id = $2 AND archived_at IS NULL)
           RETURNING id`,
         [assetId, draftId],
       );

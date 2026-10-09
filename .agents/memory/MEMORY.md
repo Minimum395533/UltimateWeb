@@ -1,4 +1,5 @@
 - [Smash world units](smash-world-units.md) — use the user's modern Smash scale (about 0.1 m/u) and frame-based movement dimensions as the gameplay foundation.
 - [Ultimate ledge recovery](ultimate-ledge-recovery.md) — include all five ledge actions, with a ledge-specific attack; confirm exact tuning before calling it accurate.
 - [Frame-data authoring](frame-data-authoring.md) — wiki numbers go in directly with citations; drawn shapes need chat approval; frame counts fixed per animation.
+- [Frame editor rules](frame-editor.md) — locked counts, never drop frames or drafts without confirmation, CLI-only approval export.
 - [Ultimate controls rules](ultimate-controls.md) — bind actions per physical button; sensitivity only changes smash/side-special flick windows, never dash.

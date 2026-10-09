@@ -295,7 +295,7 @@
 
 .movement-readout {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   margin-top: 14px;
   border: 1px solid var(--border-color);
   border-radius: 10px;
@@ -331,6 +331,24 @@
 }
 
 .movement-readout .jump-status.is-active strong {
+  color: #42d8ee;
+}
+
+.movement-readout .animation-source strong {
+  white-space: normal;
+  font-size: clamp(0.66rem, 1.4vw, 0.8rem);
+  line-height: 1.2;
+}
+
+.movement-readout .animation-source.is-approved strong {
+  color: #6ee7a8;
+}
+
+.movement-readout .animation-source.is-default strong {
+  color: #fbbf24;
+}
+
+.movement-readout .animation-source.is-draft strong {
   color: #42d8ee;
 }
 

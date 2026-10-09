@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useGameState } from '../hooks/useGameState';
 import { DEFAULT_KEYBINDS_KEYBOARD_P1 } from '../types';
 import type { PlayerKeybinds } from '../types';
-import type { MovementFrameDraft, MovementState } from '../types/frameData';
+import type { AnimationDraft } from '../types/frameData';
 import { normalizeControllerSettings } from '../physics/controllerSettings';
 import {
   CAPTAIN_FALCON_MOVEMENT,
@@ -24,7 +24,8 @@ import {
   INITIAL_MOVEMENT_ANIMATION_PREVIEW,
   stepMovementAnimationPreview,
 } from '../dev/animationPreview';
-import type { MovementAnimationPreviewFrame } from '../dev/animationPreview';
+import type { AnimationClipSource, MovementAnimationPreviewFrame } from '../dev/animationPreview';
+import type { TrainingClips } from '../data/falcon/trainingClips';
 import '../styles/TrainingScreen.css';
 
 const TrainingScreen: React.FC = () => {
@@ -38,17 +39,14 @@ const TrainingScreen: React.FC = () => {
   const [movement, setMovement] = useState(createInitialTrainingMovementState);
   const [cameraFollowEnabled, setCameraFollowEnabled] = useState(true);
   const [stageZoom, setStageZoom] = useState<'blastzone' | 'camera'>('blastzone');
-  const [previewDraft, setPreviewDraft] = useState<MovementFrameDraft | null>(null);
-  const [previewDrafts, setPreviewDrafts] = useState<
-    Partial<Record<MovementState, MovementFrameDraft>>
-  >({});
+  const [previewDraft, setPreviewDraft] = useState<AnimationDraft | null>(null);
+  const [clips, setClips] = useState<TrainingClips>({});
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [animationPreview, setAnimationPreview] =
     useState<MovementAnimationPreviewFrame | null>(null);
   const movementRef = useRef<TrainingMovementState>(createInitialTrainingMovementState());
-  const previewDraftsRef = useRef<Partial<Record<MovementState, MovementFrameDraft>>>({});
-  const previewDraftIdRef = useRef<string | null>(null);
+  const clipsRef = useRef<TrainingClips>({});
   const previewPlaybackRef = useRef(INITIAL_MOVEMENT_ANIMATION_PREVIEW);
   const activeAnimationRef = useRef<MovementAnimationPreviewFrame | null>(null);
   const forceIdleVarianceRef = useRef(false);
@@ -67,40 +65,47 @@ const TrainingScreen: React.FC = () => {
   }, [player?.keybinds, player?.controllerSettings, controllerSettings]);
 
   useEffect(() => {
-    previewDraftIdRef.current = requestedPreviewId;
-    previewDraftsRef.current = {};
+    clipsRef.current = {};
+    setClips({});
     setPreviewDraft(null);
-    setPreviewDrafts({});
     setPreviewError(null);
     setAnimationPreview(null);
     previewPlaybackRef.current = INITIAL_MOVEMENT_ANIMATION_PREVIEW;
     activeAnimationRef.current = null;
     forceIdleVarianceRef.current = false;
 
+    let cancelled = false;
+    const applyClips = (nextClips: TrainingClips) => {
+      clipsRef.current = nextClips;
+      previewPlaybackRef.current = INITIAL_MOVEMENT_ANIMATION_PREVIEW;
+      setClips(nextClips);
+    };
+    const clipModule = import('../data/falcon/trainingClips');
+
+    // Normal training: approved animations, falling back to labeled defaults.
     if (!import.meta.env.DEV || !requestedPreviewId) {
       setPreviewLoading(false);
-      return;
+      void clipModule.then(({ buildTrainingClips }) => {
+        if (!cancelled) applyClips(buildTrainingClips());
+      });
+      return () => {
+        cancelled = true;
+      };
     }
 
-    let cancelled = false;
+    // Draft playtest: working drafts override approved and default clips.
     setPreviewLoading(true);
-    void import('../dev/frameDataClient')
-      .then(({ listMovementDrafts }) => listMovementDrafts())
-      .then((drafts) => {
+    void Promise.all([
+      clipModule,
+      import('../dev/frameDataClient').then(({ listAnimationDrafts }) => listAnimationDrafts()),
+    ])
+      .then(([{ buildTrainingClips }, drafts]) => {
         if (cancelled) return;
         const selectedDraft = drafts.find(({ id }) => id === requestedPreviewId);
         if (!selectedDraft) {
           throw new Error('This draft no longer exists. Reopen it from the frame-data editor.');
         }
-
-        const draftMap: Partial<Record<MovementState, MovementFrameDraft>> = {};
-        for (const item of drafts) {
-          if (!draftMap[item.motionState]) draftMap[item.motionState] = item;
-        }
-        draftMap[selectedDraft.motionState] = selectedDraft;
-        previewDraftsRef.current = draftMap;
-        previewPlaybackRef.current = INITIAL_MOVEMENT_ANIMATION_PREVIEW;
-        setPreviewDrafts(draftMap);
+        applyClips(buildTrainingClips(drafts));
         setPreviewDraft(selectedDraft);
       })
       .catch((loadError: unknown) => {
@@ -108,7 +113,7 @@ const TrainingScreen: React.FC = () => {
         setPreviewError(
           loadError instanceof Error
             ? loadError.message
-            : 'Could not load saved movement drafts.',
+            : 'Could not load saved animation drafts.',
         );
       })
       .finally(() => {
@@ -179,20 +184,15 @@ const TrainingScreen: React.FC = () => {
             input,
             controllerSettingsRef.current,
           );
-          if (previewDraftIdRef.current) {
-            const previewStep = stepMovementAnimationPreview(
-              previewPlaybackRef.current,
-              movementRef.current,
-              previewDraftsRef.current,
-              Math.random,
-              forceIdleVarianceRef.current,
-            );
-            previewPlaybackRef.current = previewStep.playback;
-            activeAnimationRef.current = previewStep.animation;
-          } else {
-            previewPlaybackRef.current = INITIAL_MOVEMENT_ANIMATION_PREVIEW;
-            activeAnimationRef.current = null;
-          }
+          const previewStep = stepMovementAnimationPreview(
+            previewPlaybackRef.current,
+            movementRef.current,
+            clipsRef.current,
+            Math.random,
+            forceIdleVarianceRef.current,
+          );
+          previewPlaybackRef.current = previewStep.playback;
+          activeAnimationRef.current = previewStep.animation;
           forceIdleVarianceRef.current = false;
           newlyPressedKeys.current.clear();
           accumulatedMilliseconds -= TRAINING_STEP_MILLISECONDS;
@@ -284,9 +284,15 @@ const TrainingScreen: React.FC = () => {
   const showDraftSilhouette = Boolean(
     draftSilhouette && draftSilhouette.points.length >= 2,
   );
-  const idleVarianceDraftAvailable = Boolean(
-    previewDrafts['idle-variance']?.frames.length,
-  );
+  const idleVarianceDraftAvailable = Boolean(clips['idle-variance']?.frames.length);
+  const clipSource: AnimationClipSource | null = animationPreview?.clip.source ?? null;
+  const clipSourceLabel = clipSource === 'draft'
+    ? 'WORKING DRAFT'
+    : clipSource === 'approved'
+      ? 'APPROVED'
+      : clipSource === 'default'
+        ? 'DEFAULT SHAPES · NOT APPROVED'
+        : 'NO ANIMATION';
 
   return (
     <main className="training-screen">
@@ -345,7 +351,7 @@ const TrainingScreen: React.FC = () => {
                     : previewLoading
                       ? 'Loading draft data'
                       : animationPreview
-                        ? `${animationPreview.motionState.toUpperCase()} · FRAME ${animationPreview.frame.frameNumber}/${animationPreview.draft.frames.length}`
+                        ? `${animationPreview.motionState.toUpperCase()} · ${clipSourceLabel} · FRAME ${animationPreview.frame.frameNumber}/${animationPreview.clip.frames.length}`
                         : 'No saved clip for the current state'}
                 </strong>
                 {previewError && <small>{previewError}</small>}
@@ -456,7 +462,7 @@ const TrainingScreen: React.FC = () => {
               }}
               role="img"
               aria-label={showDraftSilhouette
-                ? `Movement draft preview: ${animationPreview?.draft.name ?? 'untitled'}`
+                ? `Captain Falcon ${animationPreview?.motionState ?? ''} animation (${clipSourceLabel.toLowerCase()})`
                 : 'Simple Captain Falcon movement prototype'}
             >
               {showDraftSilhouette && draftSilhouette && (
@@ -524,6 +530,10 @@ const TrainingScreen: React.FC = () => {
           <div>
             <span>JUMPS LEFT</span>
             <strong>{jumpsRemaining}</strong>
+          </div>
+          <div className={`animation-source is-${clipSource ?? 'none'}`}>
+            <span>ANIMATION</span>
+            <strong>{clipSourceLabel}</strong>
           </div>
         </div>
 
