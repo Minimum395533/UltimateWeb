@@ -1217,7 +1217,7 @@ const FrameDataEditor = () => {
                             );
                           })}
 
-                          {showSilhouette && activeFrame.silhouette.points.map((point, index) => (
+                          {showSilhouette && addingPoint && activeFrame.silhouette.points.map((point, index) => (
                             <g key={point.id}>
                               <circle
                                 className="fd-silhouette-point"
