@@ -11,12 +11,14 @@ import {
 import {
   FRAME_DATA_CHARACTER_ID,
   FRAME_DATA_SCHEMA_VERSION,
+  DEFAULT_REFERENCE_ALIGNMENT,
   MOVEMENT_STATES,
 } from '../src/types/frameData.ts';
 import type {
   MovementFrame,
   MovementFrameDraft,
   MovementState,
+  ReferenceAlignment,
   ReferenceAssetMetadata,
 } from '../src/types/frameData.ts';
 
@@ -31,7 +33,6 @@ const ALLOWED_IMAGE_TYPES = new Set([
 ]);
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 type NextFunction = (error?: unknown) => void;
 
 interface DraftRow {
@@ -43,6 +44,7 @@ interface DraftRow {
   status: 'draft';
   frames: MovementFrame[];
   reference_asset_id: string | null;
+  reference_alignment: ReferenceAlignment;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -66,6 +68,22 @@ interface JsonObject {
 
 function isObject(value: unknown): value is JsonObject {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isValidReferenceAlignment(value: unknown): value is ReferenceAlignment {
+  if (!isObject(value)) return false;
+  const { scale, offsetX, offsetY, locked } = value;
+  return typeof scale === 'number'
+    && Number.isFinite(scale)
+    && scale >= 0.2
+    && scale <= 3
+    && typeof offsetX === 'number'
+    && Number.isFinite(offsetX)
+    && Math.abs(offsetX) <= 20
+    && typeof offsetY === 'number'
+    && Number.isFinite(offsetY)
+    && Math.abs(offsetY) <= 20
+    && typeof locked === 'boolean';
 }
 
 function toIsoString(value: Date | string): string {
@@ -92,6 +110,7 @@ function toDraft(row: DraftRow, assets: ReferenceAssetMetadata[] = []): Movement
     status: 'draft',
     frames: row.frames,
     referenceAssetId: row.reference_asset_id,
+    referenceAlignment: row.reference_alignment,
     assets,
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
@@ -207,7 +226,7 @@ async function getDraft(
 ): Promise<MovementFrameDraft | null> {
   const result = await pool.query<DraftRow>(
     `SELECT id, character_id, motion_state, name, schema_version, status,
-            frames, reference_asset_id, created_at, updated_at
+            frames, reference_asset_id, reference_alignment, created_at, updated_at
        FROM frame_data_drafts
       WHERE id = $1`,
     [draftId],
@@ -227,7 +246,7 @@ async function getDraft(
 async function listDrafts(pool: Pool): Promise<MovementFrameDraft[]> {
   const draftResult = await pool.query<DraftRow>(
     `SELECT id, character_id, motion_state, name, schema_version, status,
-            frames, reference_asset_id, created_at, updated_at
+            frames, reference_asset_id, reference_alignment, created_at, updated_at
        FROM frame_data_drafts
       ORDER BY motion_state ASC, updated_at DESC`,
   );
@@ -317,7 +336,7 @@ async function handleRequest(
          (id, character_id, motion_state, name, schema_version, status, frames)
        VALUES ($1, $2, $3, $4, $5, 'draft', $6::jsonb)
        RETURNING id, character_id, motion_state, name, schema_version, status,
-                 frames, reference_asset_id, created_at, updated_at`,
+                  frames, reference_asset_id, reference_alignment, created_at, updated_at`,
       [
         id,
         FRAME_DATA_CHARACTER_ID,
@@ -364,11 +383,16 @@ async function handleRequest(
       return;
     }
     const referenceAssetId = body.referenceAssetId;
+    const referenceAlignment = body.referenceAlignment;
     if (
       referenceAssetId !== null
       && (typeof referenceAssetId !== 'string' || !UUID_PATTERN.test(referenceAssetId))
     ) {
       sendError(response, 400, 'Choose a valid reference asset or clear the reference.');
+      return;
+    }
+    if (referenceAlignment !== undefined && !isValidReferenceAlignment(referenceAlignment)) {
+      sendError(response, 400, 'Reference alignment must include a supported scale, offsets, and lock state.');
       return;
     }
 
@@ -387,11 +411,18 @@ async function handleRequest(
 
     const result = await pool.query<DraftRow>(
       `UPDATE frame_data_drafts
-          SET name = $1, frames = $2::jsonb, reference_asset_id = $3, updated_at = NOW()
-        WHERE id = $4
+          SET name = $1, frames = $2::jsonb, reference_asset_id = $3,
+              reference_alignment = COALESCE($4::jsonb, reference_alignment), updated_at = NOW()
+        WHERE id = $5
         RETURNING id, character_id, motion_state, name, schema_version, status,
-                  frames, reference_asset_id, created_at, updated_at`,
-      [name, JSON.stringify(body.frames), referenceAssetId, draftId],
+                  frames, reference_asset_id, reference_alignment, created_at, updated_at`,
+      [
+        name,
+        JSON.stringify(body.frames),
+        referenceAssetId,
+        referenceAlignment === undefined ? null : JSON.stringify(referenceAlignment),
+        draftId,
+      ],
     );
     if (!result.rows[0]) {
       sendError(response, 404, 'Movement draft not found.');
@@ -456,8 +487,10 @@ async function handleRequest(
         [assetId, draftId, fileName, mediaType, imageData.length, imageData],
       );
       await client.query(
-        'UPDATE frame_data_drafts SET reference_asset_id = $1, updated_at = NOW() WHERE id = $2',
-        [assetId, draftId],
+        `UPDATE frame_data_drafts
+            SET reference_asset_id = $1, reference_alignment = $3::jsonb, updated_at = NOW()
+          WHERE id = $2`,
+        [assetId, draftId, JSON.stringify(DEFAULT_REFERENCE_ALIGNMENT)],
       );
       await client.query('COMMIT');
       sendJson(response, 201, toAssetMetadata(assetResult.rows[0]));

@@ -2,6 +2,7 @@ import type {
   MovementFrame,
   MovementFrameDraft,
   MovementState,
+  ReferenceAlignment,
   ReferenceAssetMetadata,
 } from '../types/frameData.ts';
 
@@ -14,6 +15,7 @@ interface UpdateDraftRequest {
   name: string;
   frames: MovementFrame[];
   referenceAssetId: string | null;
+  referenceAlignment: ReferenceAlignment;
 }
 
 async function requestJson<T>(

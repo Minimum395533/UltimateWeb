@@ -49,6 +49,12 @@ test('development API persists frames and reference media then deletes the draft
   draftId = created.id;
   assert.equal(created.status, 'draft');
   assert.equal(created.frames.length, 1);
+  assert.deepEqual(created.referenceAlignment, {
+    scale: 1,
+    offsetX: 0,
+    offsetY: 0,
+    locked: true,
+  });
 
   const firstFrame = {
     ...created.frames[0],
@@ -88,10 +94,23 @@ test('development API persists frames and reference media then deletes the draft
         name: 'Captain Falcon · Idle',
         frames: [firstFrame, secondFrame],
         referenceAssetId: null,
+        referenceAlignment: {
+          scale: 1.35,
+          offsetX: 2.5,
+          offsetY: -1,
+          locked: false,
+        },
       }),
     },
   );
   assert.equal(updateResponse.status, 200);
+  const updatedDraft = await updateResponse.json();
+  assert.deepEqual(updatedDraft.referenceAlignment, {
+    scale: 1.35,
+    offsetX: 2.5,
+    offsetY: -1,
+    locked: false,
+  });
 
   const invalidFrame = structuredClone(firstFrame);
   invalidFrame.hurtboxes[0].radius = -1;
@@ -109,6 +128,26 @@ test('development API persists frames and reference media then deletes the draft
   );
   assert.equal(invalidUpdateResponse.status, 400);
 
+  const invalidAlignmentResponse = await fetch(
+    `${origin}/api/dev/frame-data/${created.id}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Captain Falcon · Idle',
+        frames: [firstFrame, secondFrame],
+        referenceAssetId: null,
+        referenceAlignment: {
+          scale: 4,
+          offsetX: 2.5,
+          offsetY: -1,
+          locked: false,
+        },
+      }),
+    },
+  );
+  assert.equal(invalidAlignmentResponse.status, 400);
+
   const loadedResponse = await fetch(`${origin}/api/dev/frame-data/${created.id}`);
   assert.equal(loadedResponse.status, 200);
   const loaded = await loadedResponse.json();
@@ -117,6 +156,12 @@ test('development API persists frames and reference media then deletes the draft
   assert.deepEqual(loaded.frames[1].hurtboxes, []);
   assert.equal(loaded.frames[0].silhouette.color, '#5ce1e6');
   assert.equal(loaded.frames[1].silhouette.color, '#ffc400');
+  assert.deepEqual(loaded.referenceAlignment, {
+    scale: 1.35,
+    offsetX: 2.5,
+    offsetY: -1,
+    locked: false,
+  });
 
   const pngBytes = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/a6kAAAAASUVORK5CYII=',
@@ -162,6 +207,12 @@ test('development API persists frames and reference media then deletes the draft
   const draftAfterUpload = await savedAfterUpload.json();
   assert.equal(draftAfterUpload.referenceAssetId, asset.id);
   assert.equal(draftAfterUpload.assets.length, 2);
+  assert.deepEqual(draftAfterUpload.referenceAlignment, {
+    scale: 1,
+    offsetX: 0,
+    offsetY: 0,
+    locked: true,
+  });
 
   const deleteResponse = await fetch(`${origin}/api/dev/frame-data/${created.id}`, {
     method: 'DELETE',

@@ -23,11 +23,12 @@ import {
   updateMovementDraft,
   uploadMovementReference,
 } from '../../dev/frameDataClient';
-import { MOVEMENT_STATES } from '../../types/frameData';
+import { DEFAULT_REFERENCE_ALIGNMENT, MOVEMENT_STATES } from '../../types/frameData';
 import type {
   MovementFrame,
   MovementFrameDraft,
   MovementHurtbox,
+  ReferenceAlignment,
   MovementSilhouette,
   MovementState,
   SilhouettePoint,
@@ -39,6 +40,10 @@ const FRAME_LIMIT = 2000;
 const HURTBOX_LIMIT = 64;
 const SILHOUETTE_LIMIT = 512;
 const COORDINATE_LIMIT = 500;
+const NEW_REFERENCE_ALIGNMENT: ReferenceAlignment = {
+  ...DEFAULT_REFERENCE_ALIGNMENT,
+  locked: false,
+};
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
 
@@ -108,9 +113,6 @@ const FrameDataEditor = () => {
   const [referenceUrl, setReferenceUrl] = useState<string | null>(null);
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const [referenceOpacity, setReferenceOpacity] = useState(0.45);
-  const [referenceScale, setReferenceScale] = useState(1);
-  const [referenceOffsetX, setReferenceOffsetX] = useState(0);
-  const [referenceOffsetY, setReferenceOffsetY] = useState(0);
   const [gifFrames, setGifFrames] = useState<ParsedFrame[] | null>(null);
   const [gifDimensions, setGifDimensions] = useState({ width: 0, height: 0 });
   const [gifIndex, setGifIndex] = useState(0);
@@ -125,6 +127,12 @@ const FrameDataEditor = () => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const draggingPoint = useRef<string | null>(null);
   const draggingEndpoint = useRef<{ hurtboxId: string; endpoint: 'start' | 'end' } | null>(null);
+  const draggingReference = useRef<{
+    clientX: number;
+    clientY: number;
+    offsetX: number;
+    offsetY: number;
+  } | null>(null);
   const suppressCanvasClick = useRef(false);
   const referenceUrlRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -137,6 +145,13 @@ const FrameDataEditor = () => {
     () => draft?.assets.find((asset) => asset.id === draft.referenceAssetId) ?? null,
     [draft],
   );
+  const referenceAlignment = draft?.referenceAlignment ?? DEFAULT_REFERENCE_ALIGNMENT;
+  const referenceImageBox = {
+    x: 240 + referenceAlignment.offsetX * 10 - 70 * referenceAlignment.scale,
+    y: 280 + referenceAlignment.offsetY * -10 - 120 * referenceAlignment.scale,
+    width: 140 * referenceAlignment.scale,
+    height: 240 * referenceAlignment.scale,
+  };
   const loadDrafts = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -173,6 +188,16 @@ const FrameDataEditor = () => {
       return updater(current);
     });
     markDirty();
+  };
+
+  const updateReferenceAlignment = (patch: Partial<ReferenceAlignment>) => {
+    updateDraftLocal((current) => ({
+      ...current,
+      referenceAlignment: {
+        ...(current.referenceAlignment ?? DEFAULT_REFERENCE_ALIGNMENT),
+        ...patch,
+      },
+    }));
   };
 
   const updateFrame = (frameId: string, updater: (frame: MovementFrame) => MovementFrame) => {
@@ -243,6 +268,7 @@ const FrameDataEditor = () => {
         name: captured.name,
         frames: captured.frames,
         referenceAssetId: captured.referenceAssetId,
+        referenceAlignment: captured.referenceAlignment,
       });
       setDrafts((current) => current.map((item) => item.id === saved.id ? saved : item));
       if (revision.current === capturedRevision) {
@@ -427,6 +453,18 @@ const FrameDataEditor = () => {
   };
 
   const handleCanvasPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (draggingReference.current && draft && !referenceAlignment.locked) {
+      const drag = draggingReference.current;
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const screenToView = VIEW.width / bounds.width;
+      const deltaX = (event.clientX - drag.clientX) * screenToView / viewZoom / 10;
+      const deltaY = (event.clientY - drag.clientY) * screenToView / viewZoom / 10;
+      updateReferenceAlignment({
+        offsetX: Math.max(-20, Math.min(20, Number((drag.offsetX + deltaX).toFixed(1)))),
+        offsetY: Math.max(-20, Math.min(20, Number((drag.offsetY - deltaY).toFixed(1)))),
+      });
+      return;
+    }
     if (!draggingPoint.current && !draggingEndpoint.current) return;
     const coordinates = svgCoordinates(event);
     if (draggingPoint.current) {
@@ -445,11 +483,29 @@ const FrameDataEditor = () => {
   };
 
   const handleCanvasPointerUp = (event: ReactPointerEvent<SVGSVGElement>) => {
+    draggingReference.current = null;
     draggingPoint.current = null;
     draggingEndpoint.current = null;
+    if (event.type === 'pointercancel') {
+      suppressCanvasClick.current = false;
+    }
     if (svgRef.current?.hasPointerCapture(event.pointerId)) {
       svgRef.current.releasePointerCapture(event.pointerId);
     }
+  };
+
+  const handleReferencePointerDown = (event: ReactPointerEvent<SVGElement>) => {
+    if (!draft || referenceAlignment.locked) return;
+    event.preventDefault();
+    event.stopPropagation();
+    draggingReference.current = {
+      clientX: event.clientX,
+      clientY: event.clientY,
+      offsetX: referenceAlignment.offsetX,
+      offsetY: referenceAlignment.offsetY,
+    };
+    suppressCanvasClick.current = true;
+    svgRef.current?.setPointerCapture(event.pointerId);
   };
 
   const handleCanvasClick = (event: ReactMouseEvent<SVGSVGElement>) => {
@@ -457,6 +513,7 @@ const FrameDataEditor = () => {
       suppressCanvasClick.current = false;
       return;
     }
+    if (activeAsset && !referenceAlignment.locked) return;
     if (!addingPoint || !activeFrame || activeFrame.silhouette.points.length >= SILHOUETTE_LIMIT) return;
     const coordinates = svgCoordinates(event);
     const newPoint = createSilhouettePoint(coordinates.x, coordinates.y);
@@ -483,18 +540,15 @@ const FrameDataEditor = () => {
     setReferenceError(null);
     try {
       const asset = await uploadMovementReference(draft.id, file);
-      setDraft((current) => current ? {
+      updateDraftLocal((current) => ({
         ...current,
         assets: [asset, ...current.assets.filter((item) => item.id !== asset.id)],
         referenceAssetId: asset.id,
-      } : current);
-      markDirty();
+        referenceAlignment: { ...NEW_REFERENCE_ALIGNMENT },
+      }));
       setGifFrames(null);
       setGifIndex(0);
       setReferenceOpacity(0.45);
-      setReferenceScale(1);
-      setReferenceOffsetX(0);
-      setReferenceOffsetY(0);
       setSaveMessage('Reference uploaded · save draft to attach');
     } catch (uploadError) {
       setReferenceError(uploadError instanceof Error ? uploadError.message : 'Reference upload failed.');
@@ -925,14 +979,20 @@ const FrameDataEditor = () => {
                           >
                           {referenceUrl && activeAsset && (
                             <image
+                              className={`fd-reference-image${referenceAlignment.locked ? ' is-locked' : ' is-draggable'}`}
                               href={referenceUrl}
-                              x={240 + referenceOffsetX * 10 - 70 * referenceScale}
-                              y={280 + referenceOffsetY * -10 - 120 * referenceScale}
-                              width={140 * referenceScale}
-                              height={240 * referenceScale}
+                              x={referenceImageBox.x}
+                              y={referenceImageBox.y}
+                              width={referenceImageBox.width}
+                              height={referenceImageBox.height}
                               preserveAspectRatio="xMidYMid meet"
                               opacity={referenceOpacity}
                               aria-label={`Reference image ${activeAsset.fileName}`}
+                              onPointerDown={handleReferencePointerDown}
+                              onClick={(event) => {
+                                suppressCanvasClick.current = false;
+                                event.stopPropagation();
+                              }}
                             />
                           )}
                           {showGrid && (
@@ -1051,6 +1111,19 @@ const FrameDataEditor = () => {
                           {addingPoint && (
                             <text x="240" y="18" textAnchor="middle" fill="#087e95" fontSize="8" fontFamily="DM Mono, monospace">CLICK CANVAS TO PLACE POINT</text>
                           )}
+                          {referenceUrl && activeAsset && !referenceAlignment.locked && (
+                            <rect
+                              className="fd-reference-drag-surface"
+                              x={referenceImageBox.x}
+                              y={referenceImageBox.y}
+                              width={referenceImageBox.width}
+                              height={referenceImageBox.height}
+                              fill="transparent"
+                              pointerEvents="all"
+                              aria-hidden="true"
+                              onPointerDown={handleReferencePointerDown}
+                            />
+                          )}
                           </g>
                         </svg>
                       </div>
@@ -1059,6 +1132,39 @@ const FrameDataEditor = () => {
                         <strong>1 grid interval = 1 unit (u)</strong>
                       </div>
                       <div className="fd-reference-controls">
+                        <div className="fd-reference-align-head">
+                          <div>
+                            <span className="fd-control-kicker">REFERENCE REGISTER</span>
+                            <strong className={`fd-alignment-status${referenceAlignment.locked ? ' is-locked' : ' is-unlocked'}`} aria-live="polite">
+                              <i aria-hidden="true" /> {!activeAsset
+                                ? 'No reference attached'
+                                : referenceAlignment.locked
+                                  ? 'Position locked'
+                                  : 'Position unlocked'}
+                            </strong>
+                            <p>
+                              {!activeAsset
+                                ? 'Upload a still image or GIF to enable alignment and lock controls.'
+                                : referenceAlignment.locked
+                                  ? 'Reference is fixed. Unlock to realign.'
+                                  : 'Drag the image to line it up. Lock before tracing so image movement cannot interfere with silhouette points or capsule endpoints.'}
+                            </p>
+                          </div>
+                          <button
+                            className={`fd-button fd-lock-button${referenceAlignment.locked ? ' is-locked' : ''}`}
+                            type="button"
+                            aria-label="Reference position lock"
+                            aria-pressed={referenceAlignment.locked}
+                            onClick={() => updateReferenceAlignment({ locked: !referenceAlignment.locked })}
+                            disabled={!activeAsset}
+                          >
+                            {!activeAsset
+                              ? 'Reference required'
+                              : referenceAlignment.locked
+                                ? 'Unlock position'
+                                : 'Lock position'}
+                          </button>
+                        </div>
                         <label className="fd-control">
                           <span>Overlay opacity</span>
                           <span className="fd-range-row">
@@ -1067,16 +1173,88 @@ const FrameDataEditor = () => {
                           </span>
                         </label>
                         <label className="fd-control">
-                          <span>Scale</span>
-                          <input className="fd-number-input" type="number" min="0.2" max="3" step="0.05" value={referenceScale} onChange={(event) => setReferenceScale(Math.max(0.2, Math.min(3, Number(event.currentTarget.value) || 0.2)))} disabled={!activeAsset} />
-                        </label>
-                        <label className="fd-control">
-                          <span>Offset X / Y</span>
-                          <span className="fd-range-row">
-                            <input aria-label="Reference horizontal offset" type="range" min="-20" max="20" step="0.5" value={referenceOffsetX} onChange={(event) => setReferenceOffsetX(Number(event.currentTarget.value))} disabled={!activeAsset} />
-                            <input aria-label="Reference vertical offset" type="range" min="-20" max="20" step="0.5" value={referenceOffsetY} onChange={(event) => setReferenceOffsetY(Number(event.currentTarget.value))} disabled={!activeAsset} />
+                          <span>Reference scale</span>
+                          <span className="fd-range-row fd-scale-row">
+                            <input
+                              aria-label="Reference scale"
+                              type="range"
+                              min="0.2"
+                              max="3"
+                              step="0.05"
+                              value={referenceAlignment.scale}
+                              onChange={(event) => updateReferenceAlignment({ scale: Number(event.currentTarget.value) })}
+                              disabled={!activeAsset || referenceAlignment.locked}
+                            />
+                            <input
+                              className="fd-number-input"
+                              type="number"
+                              min="0.2"
+                              max="3"
+                              step="0.05"
+                              value={referenceAlignment.scale}
+                              aria-label="Reference scale value"
+                              onChange={(event) => {
+                                const value = Number(event.currentTarget.value);
+                                if (Number.isFinite(value)) {
+                                  updateReferenceAlignment({ scale: Math.max(0.2, Math.min(3, value)) });
+                                }
+                              }}
+                              disabled={!activeAsset || referenceAlignment.locked}
+                            />
                           </span>
                         </label>
+                        <div className="fd-offset-controls">
+                          <div className="fd-offset-title">
+                            <span>Position · Smash units</span>
+                            <button
+                              className="fd-reset-alignment"
+                              type="button"
+                              onClick={() => updateReferenceAlignment({ scale: 1, offsetX: 0, offsetY: 0 })}
+                              disabled={!activeAsset || referenceAlignment.locked}
+                            >
+                              Reset alignment
+                            </button>
+                          </div>
+                          {([
+                            { axis: 'X', value: referenceAlignment.offsetX, fieldLabel: 'Reference horizontal offset' },
+                            { axis: 'Y', value: referenceAlignment.offsetY, fieldLabel: 'Reference vertical offset' },
+                          ] as const).map(({ axis, value, fieldLabel }) => (
+                            <label className="fd-offset-row" key={axis}>
+                              <span className="fd-offset-axis">{axis}</span>
+                              <input
+                                aria-label={`${fieldLabel} slider`}
+                                type="range"
+                                min="-20"
+                                max="20"
+                                step="0.5"
+                                value={value}
+                                onChange={(event) => updateReferenceAlignment({
+                                  [axis === 'X' ? 'offsetX' : 'offsetY']: Number(event.currentTarget.value),
+                                })}
+                                disabled={!activeAsset || referenceAlignment.locked}
+                              />
+                              <input
+                                className="fd-number-input"
+                                type="number"
+                                min="-20"
+                                max="20"
+                                step="0.1"
+                                value={value}
+                                aria-label={fieldLabel}
+                                onChange={(event) => {
+                                  const parsed = Number(event.currentTarget.value);
+                                  if (Number.isFinite(parsed)) {
+                                    updateReferenceAlignment({
+                                      [axis === 'X' ? 'offsetX' : 'offsetY']: Math.max(-20, Math.min(20, parsed)),
+                                    });
+                                  }
+                                }}
+                                disabled={!activeAsset || referenceAlignment.locked}
+                              />
+                              <small>u</small>
+                            </label>
+                          ))}
+                        </div>
                       </div>
                     </section>
 
@@ -1218,7 +1396,7 @@ const FrameDataEditor = () => {
                           <div>
                             <span className="fd-section-kicker">VISUAL REFERENCE</span>
                             <h3>Still image / GIF</h3>
-                            <p>One draft-level reference · image alignment stays local to this editor.</p>
+                            <p>One draft-level reference · alignment is saved with the draft.</p>
                           </div>
                           {activeAsset && <span className="fd-asset-name" title={activeAsset.fileName}>{activeAsset.fileName}</span>}
                         </div>

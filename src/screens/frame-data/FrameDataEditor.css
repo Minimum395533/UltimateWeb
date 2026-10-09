@@ -859,6 +859,208 @@
   font-size: 0.59rem;
 }
 
+.fd-reference-controls {
+  grid-template-columns: minmax(170px, 0.85fr) minmax(210px, 1fr);
+  align-items: start;
+  gap: 12px 16px;
+  padding: 13px 14px 15px;
+}
+
+.fd-reference-align-head {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 0 0 11px;
+  border-bottom: 1px solid #dbe2e9;
+}
+
+.fd-reference-align-head > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fd-control-kicker,
+.fd-offset-title > span {
+  color: #718196;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.54rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+}
+
+.fd-alignment-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #087f96;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.fd-alignment-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #12a8bb;
+  box-shadow: 0 0 0 3px rgba(18, 168, 187, 0.12);
+}
+
+.fd-alignment-status.is-locked {
+  color: #218961;
+}
+
+.fd-alignment-status.is-locked i {
+  background: #218961;
+  box-shadow: 0 0 0 3px rgba(33, 137, 97, 0.12);
+}
+
+.fd-reference-align-head p {
+  max-width: 510px;
+  margin: 0;
+  color: #718196;
+  font-size: 0.62rem;
+  line-height: 1.4;
+}
+
+.fd-reference-controls .fd-lock-button {
+  width: auto;
+  min-width: 124px;
+  min-height: 34px;
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border-color: #159eb5;
+  background: #e5f8fa;
+  color: #087f96;
+  font-size: 0.63rem;
+}
+
+.fd-reference-controls .fd-lock-button.is-locked {
+  border-color: #90c8ad;
+  background: #eaf6ef;
+  color: #247b57;
+}
+
+.fd-reference-controls > .fd-control {
+  min-width: 0;
+}
+
+.fd-reference-controls .fd-control > span:first-child,
+.fd-offset-title > span {
+  color: #586b80;
+  font-size: 0.57rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fd-scale-row .fd-number-input {
+  width: 70px;
+  flex: 0 0 70px;
+}
+
+.fd-offset-controls {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 7px;
+  padding: 10px 11px;
+  border: 1px solid #d6e0e8;
+  border-radius: 6px;
+  background: rgba(244, 248, 250, 0.78);
+}
+
+.fd-offset-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.fd-offset-title > span {
+  color: #586b80;
+}
+
+.fd-reset-alignment {
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: #087f96;
+  font-size: 0.59rem;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.fd-reset-alignment:hover:not(:disabled) {
+  color: #075b6b;
+}
+
+.fd-reset-alignment:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.fd-offset-row {
+  display: grid;
+  grid-template-columns: 24px minmax(70px, 1fr) 76px 12px;
+  align-items: center;
+  gap: 8px;
+}
+
+.fd-offset-axis {
+  display: grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border: 1px solid #cdd9e2;
+  border-radius: 4px;
+  background: #fff;
+  color: #52667c;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.61rem;
+}
+
+.fd-offset-row input[type='range'],
+.fd-scale-row input[type='range'] {
+  width: 100%;
+  min-width: 0;
+  accent-color: var(--fd-cyan-deep);
+}
+
+.fd-offset-row .fd-number-input {
+  text-align: right;
+}
+
+.fd-offset-row small {
+  color: #8593a1;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.54rem;
+}
+
+.fd-reference-image.is-draggable {
+  cursor: grab;
+  touch-action: none;
+}
+
+.fd-reference-image.is-draggable:active {
+  cursor: grabbing;
+}
+
+.fd-reference-image.is-locked {
+  pointer-events: none;
+}
+
+.fd-reference-drag-surface {
+  cursor: grab;
+  touch-action: none;
+}
+
+.fd-reference-drag-surface:active {
+  cursor: grabbing;
+}
+
 .fd-inspector-head {
   padding: 13px 14px 11px;
   border-bottom: 1px solid #d8e0e7;
@@ -1677,5 +1879,36 @@
     min-height: 42px;
     padding-inline: 4px;
     font-size: 0.73rem;
+  }
+}
+
+@media (max-width: 1050px) {
+  .fd-reference-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .fd-reference-align-head,
+  .fd-offset-controls {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 520px) {
+  .fd-reference-align-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .fd-reference-controls .fd-lock-button {
+    width: 100%;
+  }
+
+  .fd-offset-row {
+    grid-template-columns: 22px minmax(55px, 1fr) 68px 10px;
+    gap: 6px;
+  }
+
+  .fd-offset-controls {
+    padding: 9px;
   }
 }

@@ -1,8 +1,9 @@
-export const FRAME_DATA_SCHEMA_VERSION = 1 as const;
+export const FRAME_DATA_SCHEMA_VERSION = 2 as const;
 export const FRAME_DATA_CHARACTER_ID = 'captain_falcon' as const;
 
 export const MOVEMENT_STATES = [
   { id: 'idle', label: 'Idle' },
+  { id: 'idle-variance', label: 'Idle variance' },
   { id: 'walk', label: 'Walk' },
   { id: 'initial-dash', label: 'Initial dash' },
   { id: 'run', label: 'Run' },
@@ -61,6 +62,20 @@ export interface ReferenceAssetMetadata {
   createdAt: string;
 }
 
+export interface ReferenceAlignment {
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+  locked: boolean;
+}
+
+export const DEFAULT_REFERENCE_ALIGNMENT: ReferenceAlignment = {
+  scale: 1,
+  offsetX: 0,
+  offsetY: 0,
+  locked: true,
+};
+
 export interface MovementFrameDraft {
   id: string;
   characterId: typeof FRAME_DATA_CHARACTER_ID;
@@ -70,6 +85,7 @@ export interface MovementFrameDraft {
   status: 'draft';
   frames: MovementFrame[];
   referenceAssetId: string | null;
+  referenceAlignment: ReferenceAlignment;
   assets: ReferenceAssetMetadata[];
   createdAt: string;
   updatedAt: string;
