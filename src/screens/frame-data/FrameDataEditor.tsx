@@ -574,8 +574,9 @@ const FrameDataEditor = () => {
         referenceAssetId: asset.id,
         referenceAlignment: { ...NEW_REFERENCE_ALIGNMENT },
       }));
-      setGifFrames(null);
-      setGifIndex(0);
+      setAnimatedReference(null);
+      setAnimationFrameIndex(0);
+      setAnimationPlaying(false);
       setReferenceOpacity(0.45);
       setSaveMessage('Reference uploaded · save draft to attach');
     } catch (uploadError) {
@@ -837,10 +838,12 @@ const FrameDataEditor = () => {
     return () => window.removeEventListener('keydown', handleKeyboardShortcuts);
   }, [draft, saveState, saveDraft, navigateFrame]);
 
-  const stepGif = (direction: -1 | 1) => {
-    if (!gifFrames?.length) return;
-    setGifPlaying(false);
-    setGifIndex((index) => (index + direction + gifFrames.length) % gifFrames.length);
+  const stepReferenceFrame = (direction: -1 | 1) => {
+    if (animatedFrameCount < 1) return;
+    setAnimationPlaying(false);
+    setAnimationFrameIndex((index) => (
+      (index + direction + animatedFrameCount) % animatedFrameCount
+    ));
   };
 
   const saveStateClass = saveState === 'saved'
@@ -1270,7 +1273,7 @@ const FrameDataEditor = () => {
                             </strong>
                             <p>
                               {!activeAsset
-                                ? 'Upload a still image or GIF to enable alignment and lock controls.'
+                                ? 'Upload a still image, GIF, or WebP to enable alignment and lock controls.'
                                 : referenceAlignment.locked
                                   ? 'Reference is fixed. Unlock to realign.'
                                   : 'Drag the image to line it up. Lock before tracing so image movement cannot interfere with silhouette points or capsule endpoints.'}
@@ -1521,8 +1524,8 @@ const FrameDataEditor = () => {
                         <div className="fd-media-title">
                           <div>
                             <span className="fd-section-kicker">VISUAL REFERENCE</span>
-                            <h3>Still image / GIF</h3>
-                            <p>One draft-level reference · alignment is saved with the draft.</p>
+                            <h3>Still image / GIF / WebP</h3>
+                            <p>Animated GIFs and WebPs can be paused and stepped frame by frame.</p>
                           </div>
                           {activeAsset && <span className="fd-asset-name" title={activeAsset.fileName}>{activeAsset.fileName}</span>}
                         </div>
@@ -1532,13 +1535,37 @@ const FrameDataEditor = () => {
                           {activeAsset && <button className="fd-button fd-button-danger" type="button" onClick={() => void detachReference()}>Remove reference</button>}
                         </div>
                         {referenceError && <div className="fd-alert" role="alert" style={{ marginTop: 8 }}>{referenceError}</div>}
-                        {gifFrames && (
+                        {animatedReference && animatedFrameCount > 0 && (
                           <div className="fd-gif-controls">
-                            <span>GIF FRAME {String(gifIndex + 1).padStart(2, '0')} / {gifFrames.length}</span>
+                            <span>{animatedFormat} FRAME {String(animationFrameIndex + 1).padStart(2, '0')} / {animatedFrameCount}</span>
                             <div className="fd-gif-buttons">
-                              <button className="fd-mini-button" type="button" onClick={() => stepGif(-1)} aria-label="Previous GIF frame">Prev</button>
-                              <button className="fd-mini-button" type="button" onClick={() => setGifPlaying((playing) => !playing)}>{gifPlaying ? 'Pause' : 'Play'}</button>
-                              <button className="fd-mini-button" type="button" onClick={() => stepGif(1)} aria-label="Next GIF frame">Next</button>
+                              <button
+                                className="fd-mini-button"
+                                type="button"
+                                onClick={() => stepReferenceFrame(-1)}
+                                disabled={animatedFrameCount < 2}
+                                aria-label="Previous animation frame"
+                              >
+                                Prev
+                              </button>
+                              <button
+                                className="fd-mini-button"
+                                type="button"
+                                onClick={() => setAnimationPlaying((playing) => !playing)}
+                                disabled={animatedFrameCount < 2}
+                                aria-label={animationPlaying ? 'Pause animation' : 'Play animation'}
+                              >
+                                {animationPlaying ? 'Pause' : 'Play'}
+                              </button>
+                              <button
+                                className="fd-mini-button"
+                                type="button"
+                                onClick={() => stepReferenceFrame(1)}
+                                disabled={animatedFrameCount < 2}
+                                aria-label="Next animation frame"
+                              >
+                                Next
+                              </button>
                             </div>
                           </div>
                         )}
