@@ -525,7 +525,7 @@ const FrameDataEditor = () => {
   };
 
   const handleReferencePointerDown = (event: ReactPointerEvent<SVGElement>) => {
-    if (!draft || referenceAlignment.locked) return;
+    if (!draft || referenceAlignment.locked || addingPoint) return;
     event.preventDefault();
     event.stopPropagation();
     draggingReference.current = {
@@ -543,7 +543,7 @@ const FrameDataEditor = () => {
       suppressCanvasClick.current = false;
       return;
     }
-    if (activeAsset && !referenceAlignment.locked) return;
+    if (activeAsset && !referenceAlignment.locked && !addingPoint) return;
     if (!addingPoint || !activeFrame || activeFrame.silhouette.points.length >= SILHOUETTE_LIMIT) return;
     const coordinates = svgCoordinates(event);
     const newPoint = createSilhouettePoint(coordinates.x, coordinates.y);
@@ -1488,7 +1488,7 @@ const FrameDataEditor = () => {
                             type="button"
                             aria-pressed={addingPoint}
                             aria-label={addingPoint ? 'Stop adding silhouette points' : 'Start adding silhouette points'}
-                            title={addingPoint ? 'Point placement is on. Click the grid to add points, then select this button to finish.' : 'Turn on persistent point placement mode.'}
+                            title={addingPoint ? 'Point placement is on. Click anywhere in the viewport, including over the reference, to add points; click here to finish.' : 'Turn on persistent point placement mode.'}
                             onClick={() => setAddingPoint((value) => !value)}
                             disabled={!addingPoint && activeFrame.silhouette.points.length >= SILHOUETTE_LIMIT}
                           >
