@@ -1,27 +1,28 @@
 import type {
-  MovementFrame,
-  MovementFrameDraft,
-  MovementState,
-  ReferenceAlignment,
+  AnimationDraft,
+  AnimationFrame,
+  ConfirmedFrameCount,
   ReferenceAssetMetadata,
+  ReferenceSettings,
 } from '../types/frameData.ts';
 
+const API_BASE = '/api/dev/frame-data';
+
 interface CreateDraftRequest {
-  motionState: MovementState;
+  animationId: string;
   name?: string;
+  frames: AnimationFrame[];
+  referenceSettings?: ReferenceSettings;
 }
 
 interface UpdateDraftRequest {
   name: string;
-  frames: MovementFrame[];
+  frames: AnimationFrame[];
   referenceAssetId: string | null;
-  referenceAlignment: ReferenceAlignment;
+  referenceSettings: ReferenceSettings;
 }
 
-async function requestJson<T>(
-  path: string,
-  init?: RequestInit,
-): Promise<T> {
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
     headers: {
@@ -36,56 +37,52 @@ async function requestJson<T>(
   return response.json() as Promise<T>;
 }
 
-export function listMovementDrafts(): Promise<MovementFrameDraft[]> {
-  return requestJson('/api/dev/frame-data');
+export function listAnimationDrafts(): Promise<AnimationDraft[]> {
+  return requestJson(API_BASE);
 }
 
-export function createMovementDraft(
-  input: CreateDraftRequest,
-): Promise<MovementFrameDraft> {
-  return requestJson('/api/dev/frame-data', {
-    method: 'POST',
-    body: JSON.stringify(input),
-  });
+export function createAnimationDraft(input: CreateDraftRequest): Promise<AnimationDraft> {
+  return requestJson(API_BASE, { method: 'POST', body: JSON.stringify(input) });
 }
 
-export function updateMovementDraft(
-  id: string,
-  input: UpdateDraftRequest,
-): Promise<MovementFrameDraft> {
-  return requestJson(`/api/dev/frame-data/${encodeURIComponent(id)}`, {
+export function updateAnimationDraft(id: string, input: UpdateDraftRequest): Promise<AnimationDraft> {
+  return requestJson(`${API_BASE}/${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: JSON.stringify(input),
   });
 }
 
-export async function deleteMovementDraft(id: string): Promise<void> {
-  await requestJson(`/api/dev/frame-data/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
+export async function deleteAnimationDraft(id: string): Promise<void> {
+  await requestJson(`${API_BASE}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function listConfirmedFrameCounts(): Promise<ConfirmedFrameCount[]> {
+  return requestJson(`${API_BASE}/frame-counts`);
+}
+
+export function confirmFrameCount(animationId: string, frameCount: number): Promise<ConfirmedFrameCount> {
+  return requestJson(`${API_BASE}/frame-counts/${encodeURIComponent(animationId)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ frameCount }),
   });
 }
 
-export function uploadMovementReference(
-  draftId: string,
-  file: File,
-): Promise<ReferenceAssetMetadata> {
-  const parameters = new URLSearchParams({ fileName: file.name });
-  return requestJson(
-    `/api/dev/frame-data/${encodeURIComponent(draftId)}/assets?${parameters}`,
-    {
-      method: 'POST',
-      body: file,
-      headers: { 'Content-Type': file.type || 'application/octet-stream' },
-    },
-  );
+export async function clearConfirmedFrameCount(animationId: string): Promise<void> {
+  await requestJson(`${API_BASE}/frame-counts/${encodeURIComponent(animationId)}`, { method: 'DELETE' });
 }
 
-export async function getMovementReference(
-  draftId: string,
-  assetId: string,
-): Promise<Blob> {
+export function uploadReference(draftId: string, file: File): Promise<ReferenceAssetMetadata> {
+  const parameters = new URLSearchParams({ fileName: file.name });
+  return requestJson(`${API_BASE}/${encodeURIComponent(draftId)}/assets?${parameters}`, {
+    method: 'POST',
+    body: file,
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+  });
+}
+
+export async function getReference(draftId: string, assetId: string): Promise<Blob> {
   const response = await fetch(
-    `/api/dev/frame-data/${encodeURIComponent(draftId)}/assets/${encodeURIComponent(assetId)}`,
+    `${API_BASE}/${encodeURIComponent(draftId)}/assets/${encodeURIComponent(assetId)}`,
     { cache: 'no-store' },
   );
   if (!response.ok) {
@@ -95,12 +92,9 @@ export async function getMovementReference(
   return response.blob();
 }
 
-export async function deleteMovementReference(
-  draftId: string,
-  assetId: string,
-): Promise<void> {
+export async function deleteReference(draftId: string, assetId: string): Promise<void> {
   await requestJson(
-    `/api/dev/frame-data/${encodeURIComponent(draftId)}/assets/${encodeURIComponent(assetId)}`,
+    `${API_BASE}/${encodeURIComponent(draftId)}/assets/${encodeURIComponent(assetId)}`,
     { method: 'DELETE' },
   );
 }

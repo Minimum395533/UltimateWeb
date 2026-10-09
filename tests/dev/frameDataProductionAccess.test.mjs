@@ -11,5 +11,5 @@ test('production bundle omits the development editor and API', async () => {
 
   assert.doesNotMatch(source, /\/api\/dev\/frame-data/);
   assert.doesNotMatch(source, /\/dev\/frame-data/);
-  assert.doesNotMatch(source, /movement-frame-data-development-api/);
+  assert.doesNotMatch(source, /frame-data-development-api/);
 });

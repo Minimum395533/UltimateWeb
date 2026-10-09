@@ -4,21 +4,23 @@ import type { ServerResponse } from 'node:http';
 import { Pool } from 'pg';
 import type { Plugin, ViteDevServer } from 'vite';
 import {
-  createMovementFrame,
-  isMovementState,
-  validateMovementFrames,
+  isValidReferenceSettings,
+  upgradeDraftFramesToV3,
+  upgradeReferenceSettings,
+  validateAnimationFrames,
 } from '../src/dev/frameDataModel.ts';
 import {
+  getCatalogEntry,
+  getEffectiveFrameCount,
+} from '../src/data/falcon/animationCatalog.ts';
+import {
+  DEFAULT_REFERENCE_SETTINGS,
   FRAME_DATA_CHARACTER_ID,
   FRAME_DATA_SCHEMA_VERSION,
-  DEFAULT_REFERENCE_ALIGNMENT,
-  MOVEMENT_STATES,
 } from '../src/types/frameData.ts';
 import type {
-  MovementFrame,
-  MovementFrameDraft,
-  MovementState,
-  ReferenceAlignment,
+  AnimationDraft,
+  ConfirmedFrameCount,
   ReferenceAssetMetadata,
 } from '../src/types/frameData.ts';
 
@@ -38,16 +40,25 @@ type NextFunction = (error?: unknown) => void;
 interface DraftRow {
   id: string;
   character_id: string;
-  motion_state: MovementState;
+  animation_id: string;
   name: string;
   schema_version: number;
   status: 'draft';
-  frames: MovementFrame[];
+  frames: unknown;
   reference_asset_id: string | null;
-  reference_alignment: ReferenceAlignment;
+  reference_settings: unknown;
   created_at: Date | string;
   updated_at: Date | string;
 }
+
+interface FrameCountRow {
+  animation_id: string;
+  frame_count: number;
+  confirmed_at: Date | string;
+}
+
+const DRAFT_COLUMNS = `id, character_id, animation_id, name, schema_version, status,
+            frames, reference_asset_id, reference_settings, created_at, updated_at`;
 
 interface AssetRow {
   id: string;
@@ -70,22 +81,6 @@ function isObject(value: unknown): value is JsonObject {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function isValidReferenceAlignment(value: unknown): value is ReferenceAlignment {
-  if (!isObject(value)) return false;
-  const { scale, offsetX, offsetY, locked } = value;
-  return typeof scale === 'number'
-    && Number.isFinite(scale)
-    && scale >= 0.2
-    && scale <= 3
-    && typeof offsetX === 'number'
-    && Number.isFinite(offsetX)
-    && Math.abs(offsetX) <= 20
-    && typeof offsetY === 'number'
-    && Number.isFinite(offsetY)
-    && Math.abs(offsetY) <= 20
-    && typeof locked === 'boolean';
-}
-
 function toIsoString(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
@@ -100,17 +95,18 @@ function toAssetMetadata(row: AssetRow): ReferenceAssetMetadata {
   };
 }
 
-function toDraft(row: DraftRow, assets: ReferenceAssetMetadata[] = []): MovementFrameDraft {
+/** Rows are upgraded on read, so drafts saved by older editors still load. */
+function toDraft(row: DraftRow, assets: ReferenceAssetMetadata[] = []): AnimationDraft {
   return {
     id: row.id,
     characterId: FRAME_DATA_CHARACTER_ID,
-    motionState: row.motion_state,
+    animationId: row.animation_id,
     name: row.name,
     schemaVersion: FRAME_DATA_SCHEMA_VERSION,
     status: 'draft',
-    frames: row.frames,
+    frames: upgradeDraftFramesToV3(row.frames),
     referenceAssetId: row.reference_asset_id,
-    referenceAlignment: row.reference_alignment,
+    referenceSettings: upgradeReferenceSettings(row.reference_settings),
     assets,
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
@@ -220,13 +216,48 @@ function cleanFileName(fileName: string): string {
   return cleaned || 'reference-image';
 }
 
+function toFrameCount(row: FrameCountRow): ConfirmedFrameCount {
+  return {
+    animationId: row.animation_id,
+    frameCount: Number(row.frame_count),
+    confirmedAt: toIsoString(row.confirmed_at),
+  };
+}
+
+async function getConfirmedFrameCount(pool: Pool, animationId: string): Promise<number | null> {
+  const result = await pool.query<FrameCountRow>(
+    `SELECT animation_id, frame_count, confirmed_at
+       FROM frame_data_frame_counts
+      WHERE character_id = $1 AND animation_id = $2`,
+    [FRAME_DATA_CHARACTER_ID, animationId],
+  );
+  return result.rows[0] ? Number(result.rows[0].frame_count) : null;
+}
+
+async function listFrameCounts(pool: Pool): Promise<ConfirmedFrameCount[]> {
+  const result = await pool.query<FrameCountRow>(
+    `SELECT animation_id, frame_count, confirmed_at
+       FROM frame_data_frame_counts
+      WHERE character_id = $1
+      ORDER BY animation_id ASC`,
+    [FRAME_DATA_CHARACTER_ID],
+  );
+  return result.rows.map(toFrameCount);
+}
+
+/** Locked frame count for an animation: a confirmed count wins over the catalog. */
+async function getLockedFrameCount(pool: Pool, animationId: string): Promise<number | null> {
+  const entry = getCatalogEntry(animationId);
+  if (!entry) return null;
+  return getEffectiveFrameCount(entry, await getConfirmedFrameCount(pool, animationId));
+}
+
 async function getDraft(
   pool: Pool,
   draftId: string,
-): Promise<MovementFrameDraft | null> {
+): Promise<AnimationDraft | null> {
   const result = await pool.query<DraftRow>(
-    `SELECT id, character_id, motion_state, name, schema_version, status,
-            frames, reference_asset_id, reference_alignment, created_at, updated_at
+    `SELECT ${DRAFT_COLUMNS}
        FROM frame_data_drafts
       WHERE id = $1`,
     [draftId],
@@ -243,12 +274,11 @@ async function getDraft(
   return toDraft(row, assetsResult.rows.map(toAssetMetadata));
 }
 
-async function listDrafts(pool: Pool): Promise<MovementFrameDraft[]> {
+async function listDrafts(pool: Pool): Promise<AnimationDraft[]> {
   const draftResult = await pool.query<DraftRow>(
-    `SELECT id, character_id, motion_state, name, schema_version, status,
-            frames, reference_asset_id, reference_alignment, created_at, updated_at
+    `SELECT ${DRAFT_COLUMNS}
        FROM frame_data_drafts
-      ORDER BY motion_state ASC, updated_at DESC`,
+      ORDER BY animation_id ASC`,
   );
   if (draftResult.rows.length === 0) return [];
 
@@ -294,7 +324,7 @@ function middleware(
         return;
       }
       server.config.logger.error(
-        `[movement-frame-data] ${error instanceof Error ? error.message : 'Unexpected API error'}`,
+        `[frame-data] ${error instanceof Error ? error.message : 'Unexpected API error'}`,
       );
       sendError(response, 500, 'The frame-data request could not be completed.');
     });
@@ -315,51 +345,73 @@ async function handleRequest(
     return;
   }
 
+  if (segments[0] === 'frame-counts') {
+    await handleFrameCounts(request, response, pool, segments);
+    return;
+  }
+
   if (request.method === 'POST' && segments.length === 0) {
     const body = await readJsonBody(request);
-    if (!isObject(body) || !isMovementState(body.motionState)) {
-      sendError(response, 400, 'Choose a supported movement state.');
+    const entry = isObject(body) && typeof body.animationId === 'string'
+      ? getCatalogEntry(body.animationId)
+      : undefined;
+    if (!isObject(body) || !entry) {
+      sendError(response, 400, 'Choose an animation from the catalog.');
       return;
     }
-    const state = MOVEMENT_STATES.find(({ id }) => id === body.motionState);
     const rawName = typeof body.name === 'string' ? body.name.trim() : '';
-    const name = rawName || `Captain Falcon · ${state?.label ?? body.motionState}`;
+    const name = rawName || `Captain Falcon · ${entry.label}`;
     if (name.length > 100) {
       sendError(response, 400, 'Draft names must be 100 characters or fewer.');
       return;
     }
+    const frameCount = await getLockedFrameCount(pool, entry.id);
+    const framesError = validateAnimationFrames(body.frames, frameCount ?? undefined);
+    if (framesError) {
+      sendError(response, 400, framesError);
+      return;
+    }
+    const referenceSettings = body.referenceSettings ?? DEFAULT_REFERENCE_SETTINGS;
+    if (!isValidReferenceSettings(referenceSettings)) {
+      sendError(response, 400, 'Reference settings must include a supported scale, offsets, opacity, and lock state.');
+      return;
+    }
 
     const id = randomUUID();
-    const frames = [createMovementFrame(1)];
     const result = await pool.query<DraftRow>(
       `INSERT INTO frame_data_drafts
-         (id, character_id, motion_state, name, schema_version, status, frames)
-       VALUES ($1, $2, $3, $4, $5, 'draft', $6::jsonb)
-       RETURNING id, character_id, motion_state, name, schema_version, status,
-                  frames, reference_asset_id, reference_alignment, created_at, updated_at`,
+         (id, character_id, animation_id, name, schema_version, status, frames, reference_settings)
+       VALUES ($1, $2, $3, $4, $5, 'draft', $6::jsonb, $7::jsonb)
+       ON CONFLICT (character_id, animation_id) DO NOTHING
+       RETURNING ${DRAFT_COLUMNS}`,
       [
         id,
         FRAME_DATA_CHARACTER_ID,
-        body.motionState,
+        entry.id,
         name,
         FRAME_DATA_SCHEMA_VERSION,
-        JSON.stringify(frames),
+        JSON.stringify(body.frames),
+        JSON.stringify(referenceSettings),
       ],
     );
+    if (!result.rows[0]) {
+      sendError(response, 409, 'This animation already has a working draft.');
+      return;
+    }
     sendJson(response, 201, toDraft(result.rows[0]));
     return;
   }
 
   const draftId = segments[0];
   if (!UUID_PATTERN.test(draftId)) {
-    sendError(response, 404, 'Movement draft not found.');
+    sendError(response, 404, 'Animation draft not found.');
     return;
   }
 
   if (segments.length === 1 && request.method === 'GET') {
     const draft = await getDraft(pool, draftId);
     if (!draft) {
-      sendError(response, 404, 'Movement draft not found.');
+      sendError(response, 404, 'Animation draft not found.');
       return;
     }
     sendJson(response, 200, draft);
@@ -377,13 +429,23 @@ async function handleRequest(
       sendError(response, 400, 'Draft names must be between 1 and 100 characters.');
       return;
     }
-    const framesError = validateMovementFrames(body.frames);
+    const existing = await pool.query<{ animation_id: string }>(
+      'SELECT animation_id FROM frame_data_drafts WHERE id = $1',
+      [draftId],
+    );
+    const animationId = existing.rows[0]?.animation_id;
+    if (!animationId) {
+      sendError(response, 404, 'Animation draft not found.');
+      return;
+    }
+    const frameCount = await getLockedFrameCount(pool, animationId);
+    const framesError = validateAnimationFrames(body.frames, frameCount ?? undefined);
     if (framesError) {
       sendError(response, 400, framesError);
       return;
     }
     const referenceAssetId = body.referenceAssetId;
-    const referenceAlignment = body.referenceAlignment;
+    const referenceSettings = body.referenceSettings;
     if (
       referenceAssetId !== null
       && (typeof referenceAssetId !== 'string' || !UUID_PATTERN.test(referenceAssetId))
@@ -391,8 +453,8 @@ async function handleRequest(
       sendError(response, 400, 'Choose a valid reference asset or clear the reference.');
       return;
     }
-    if (referenceAlignment !== undefined && !isValidReferenceAlignment(referenceAlignment)) {
-      sendError(response, 400, 'Reference alignment must include a supported scale, offsets, and lock state.');
+    if (referenceSettings !== undefined && !isValidReferenceSettings(referenceSettings)) {
+      sendError(response, 400, 'Reference settings must include a supported scale, offsets, opacity, and lock state.');
       return;
     }
 
@@ -412,20 +474,19 @@ async function handleRequest(
     const result = await pool.query<DraftRow>(
       `UPDATE frame_data_drafts
           SET name = $1, frames = $2::jsonb, reference_asset_id = $3,
-              reference_alignment = COALESCE($4::jsonb, reference_alignment), updated_at = NOW()
+              reference_settings = COALESCE($4::jsonb, reference_settings), updated_at = NOW()
         WHERE id = $5
-        RETURNING id, character_id, motion_state, name, schema_version, status,
-                  frames, reference_asset_id, reference_alignment, created_at, updated_at`,
+        RETURNING ${DRAFT_COLUMNS}`,
       [
         name,
         JSON.stringify(body.frames),
         referenceAssetId,
-        referenceAlignment === undefined ? null : JSON.stringify(referenceAlignment),
+        referenceSettings === undefined ? null : JSON.stringify(referenceSettings),
         draftId,
       ],
     );
     if (!result.rows[0]) {
-      sendError(response, 404, 'Movement draft not found.');
+      sendError(response, 404, 'Animation draft not found.');
       return;
     }
     sendJson(response, 200, await getDraft(pool, draftId));
@@ -438,7 +499,7 @@ async function handleRequest(
       [draftId],
     );
     if (result.rowCount === 0) {
-      sendError(response, 404, 'Movement draft not found.');
+      sendError(response, 404, 'Animation draft not found.');
       return;
     }
     sendJson(response, 200, { deleted: true });
@@ -475,7 +536,7 @@ async function handleRequest(
       );
       if (draftResult.rowCount === 0) {
         await client.query('ROLLBACK');
-        sendError(response, 404, 'Movement draft not found.');
+        sendError(response, 404, 'Animation draft not found.');
         return;
       }
       const assetId = randomUUID();
@@ -486,11 +547,15 @@ async function handleRequest(
          RETURNING id, draft_id, file_name, media_type, size_bytes, created_at`,
         [assetId, draftId, fileName, mediaType, imageData.length, imageData],
       );
+      // A new upload becomes the active reference with fresh alignment; the
+      // animation keeps its opacity and frame-link preferences.
       await client.query(
         `UPDATE frame_data_drafts
-            SET reference_asset_id = $1, reference_alignment = $3::jsonb, updated_at = NOW()
+            SET reference_asset_id = $1,
+                reference_settings = reference_settings || $3::jsonb,
+                updated_at = NOW()
           WHERE id = $2`,
-        [assetId, draftId, JSON.stringify(DEFAULT_REFERENCE_ALIGNMENT)],
+        [assetId, draftId, JSON.stringify({ scale: 1, offsetX: 0, offsetY: 0, locked: true })],
       );
       await client.query('COMMIT');
       sendJson(response, 201, toAssetMetadata(assetResult.rows[0]));
@@ -565,9 +630,53 @@ async function handleRequest(
   sendError(response, 404, 'Frame-data endpoint not found.');
 }
 
-export function movementFrameDataPlugin(): Plugin {
+async function handleFrameCounts(
+  request: IncomingMessage,
+  response: ServerResponse,
+  pool: Pool,
+  segments: string[],
+): Promise<void> {
+  if (segments.length === 1 && request.method === 'GET') {
+    sendJson(response, 200, await listFrameCounts(pool));
+    return;
+  }
+  const animationId = segments[1];
+  if (segments.length !== 2 || !getCatalogEntry(animationId)) {
+    sendError(response, 404, 'Animation not found in the catalog.');
+    return;
+  }
+  if (request.method === 'PUT') {
+    const body = await readJsonBody(request);
+    const frameCount = isObject(body) ? body.frameCount : undefined;
+    if (!Number.isSafeInteger(frameCount) || Number(frameCount) < 1 || Number(frameCount) > 2000) {
+      sendError(response, 400, 'Frame counts must be whole numbers from 1 to 2000.');
+      return;
+    }
+    const result = await pool.query<FrameCountRow>(
+      `INSERT INTO frame_data_frame_counts (character_id, animation_id, frame_count)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (character_id, animation_id)
+       DO UPDATE SET frame_count = EXCLUDED.frame_count, confirmed_at = NOW()
+       RETURNING animation_id, frame_count, confirmed_at`,
+      [FRAME_DATA_CHARACTER_ID, animationId, frameCount],
+    );
+    sendJson(response, 200, toFrameCount(result.rows[0]));
+    return;
+  }
+  if (request.method === 'DELETE') {
+    await pool.query(
+      'DELETE FROM frame_data_frame_counts WHERE character_id = $1 AND animation_id = $2',
+      [FRAME_DATA_CHARACTER_ID, animationId],
+    );
+    sendJson(response, 200, { deleted: true });
+    return;
+  }
+  sendError(response, 404, 'Frame-data endpoint not found.');
+}
+
+export function frameDataPlugin(): Plugin {
   return {
-    name: 'movement-frame-data-development-api',
+    name: 'frame-data-development-api',
     apply: 'serve',
     configureServer(server) {
       const databaseUrl = process.env.DATABASE_URL;
@@ -578,7 +687,7 @@ export function movementFrameDataPlugin(): Plugin {
       if (pool) {
         pool.on('error', (error) => {
           server.config.logger.error(
-            `[movement-frame-data] database pool error: ${error.message}`,
+            `[frame-data] database pool error: ${error.message}`,
           );
         });
         server.httpServer?.once('close', () => {
@@ -587,7 +696,7 @@ export function movementFrameDataPlugin(): Plugin {
       }
 
       server.middlewares.use(ROUTE_BASE, middleware(pool, server));
-      server.config.logger.info('Development-only movement frame-data API registered.');
+      server.config.logger.info('Development-only frame-data API registered.');
     },
   };
 }

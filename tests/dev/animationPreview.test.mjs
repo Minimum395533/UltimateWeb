@@ -10,15 +10,19 @@ import {
 } from '../../src/dev/animationPreview.ts';
 import { createInitialTrainingMovementState } from '../../src/physics/trainingMovement.ts';
 
-function createDraft(id, motionState, frameCount) {
+function createClip(key, animationId, frameCount, source = 'draft') {
   return {
-    id,
-    motionState,
-    name: id,
+    key,
+    animationId,
+    source,
     frames: Array.from({ length: frameCount }, (_, index) => ({
+      id: `${key}-${index}`,
       frameNumber: index + 1,
       hurtboxes: [],
+      hitboxes: [],
+      grabboxes: [],
       silhouette: { color: '#20c6e7', closed: true, points: [] },
+      referenceFrame: null,
     })),
   };
 }
@@ -73,8 +77,8 @@ test('movement cancels idle variance and resets its idle timer', () => {
 test('gameplay preview plays idle variance over idle, then resumes the idle clip', () => {
   const movement = createInitialTrainingMovementState();
   const drafts = {
-    idle: createDraft('idle-draft', 'idle', 2),
-    'idle-variance': createDraft('variance-draft', 'idle-variance', 2),
+    idle: createClip('idle-draft', 'idle', 2),
+    'idle-variance': createClip('variance-draft', 'idle-variance', 2, 'approved'),
   };
 
   const idle = stepMovementAnimationPreview(
@@ -113,4 +117,19 @@ test('gameplay preview plays idle variance over idle, then resumes the idle clip
   );
   assert.equal(resumedIdle.animation.motionState, 'idle');
   assert.equal(resumedIdle.animation.frameIndex, 0);
+});
+
+test('a changed clip key restarts playback from the first frame', () => {
+  const movement = createInitialTrainingMovementState();
+  const first = stepMovementAnimationPreview(
+    INITIAL_MOVEMENT_ANIMATION_PREVIEW,
+    movement,
+    { idle: createClip('idle-a', 'idle', 3) },
+    () => 1,
+  );
+  const second = stepMovementAnimationPreview(first.playback, movement, { idle: createClip('idle-a', 'idle', 3) }, () => 1);
+  assert.equal(second.animation.frameIndex, 1);
+  const swapped = stepMovementAnimationPreview(second.playback, movement, { idle: createClip('idle-b', 'idle', 3, 'default') }, () => 1);
+  assert.equal(swapped.animation.frameIndex, 0);
+  assert.equal(swapped.animation.clip.source, 'default');
 });

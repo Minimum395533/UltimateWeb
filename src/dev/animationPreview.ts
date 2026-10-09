@@ -1,8 +1,4 @@
-import type {
-  MovementFrame,
-  MovementFrameDraft,
-  MovementState,
-} from '../types/frameData.ts';
+import type { AnimationFrame, MovementState } from '../types/frameData.ts';
 import type { TrainingMovementState } from '../physics/trainingMovement.ts';
 
 export const IDLE_VARIANCE_MIN_IDLE_FRAMES = 5 * 60;
@@ -13,17 +9,28 @@ export interface IdleVariancePlayback {
   frameIndex: number | null;
 }
 
+/** Where a training clip came from: the working draft, approved game data, or seeded defaults. */
+export type AnimationClipSource = 'draft' | 'approved' | 'default';
+
+export interface AnimationClip {
+  /** Changes whenever the clip content changes, so playback restarts. */
+  key: string;
+  animationId: string;
+  source: AnimationClipSource;
+  frames: AnimationFrame[];
+}
+
 export interface MovementAnimationPreviewState {
   idleVariance: IdleVariancePlayback;
   motionState: MovementState | null;
-  draftId: string | null;
+  clipKey: string | null;
   frameIndex: number;
 }
 
 export interface MovementAnimationPreviewFrame {
   motionState: MovementState;
-  draft: MovementFrameDraft;
-  frame: MovementFrame;
+  clip: AnimationClip;
+  frame: AnimationFrame;
   frameIndex: number;
 }
 
@@ -35,7 +42,7 @@ export const INITIAL_IDLE_VARIANCE_PLAYBACK: IdleVariancePlayback = {
 export const INITIAL_MOVEMENT_ANIMATION_PREVIEW: MovementAnimationPreviewState = {
   idleVariance: INITIAL_IDLE_VARIANCE_PLAYBACK,
   motionState: null,
-  draftId: null,
+  clipKey: null,
   frameIndex: 0,
 };
 
@@ -86,7 +93,7 @@ export function stepIdleVariancePlayback(
 export function stepMovementAnimationPreview(
   playback: MovementAnimationPreviewState,
   movement: TrainingMovementState,
-  drafts: Partial<Record<MovementState, MovementFrameDraft>>,
+  clips: Partial<Record<MovementState, AnimationClip>>,
   random: () => number = Math.random,
   forceIdleVariance = false,
 ): {
@@ -97,24 +104,24 @@ export function stepMovementAnimationPreview(
     && movement.mode === 'idle'
     && movement.inputDirection === 0
     && movement.jumpSquatFramesRemaining === 0;
-  const idleVarianceDraft = drafts['idle-variance'];
+  const idleVarianceClip = clips['idle-variance'];
   const idleVariance = stepIdleVariancePlayback(
     playback.idleVariance,
     isGroundedIdle,
-    idleVarianceDraft?.frames.length ?? 0,
+    idleVarianceClip?.frames.length ?? 0,
     random,
     forceIdleVariance,
   );
   const motionState = idleVariance.frameIndex === null
     ? getTrainingAnimationState(movement)
     : 'idle-variance';
-  const draft = drafts[motionState];
-  if (!draft?.frames.length) {
+  const clip = clips[motionState];
+  if (!clip?.frames.length) {
     return {
       playback: {
         idleVariance,
         motionState: null,
-        draftId: null,
+        clipKey: null,
         frameIndex: 0,
       },
       animation: null,
@@ -123,20 +130,20 @@ export function stepMovementAnimationPreview(
 
   const frameIndex = motionState === 'idle-variance'
     ? idleVariance.frameIndex ?? 0
-    : playback.motionState === motionState && playback.draftId === draft.id
-      ? (playback.frameIndex + 1) % draft.frames.length
+    : playback.motionState === motionState && playback.clipKey === clip.key
+      ? (playback.frameIndex + 1) % clip.frames.length
       : 0;
   return {
     playback: {
       idleVariance,
       motionState,
-      draftId: draft.id,
+      clipKey: clip.key,
       frameIndex,
     },
     animation: {
       motionState,
-      draft,
-      frame: draft.frames[frameIndex],
+      clip,
+      frame: clip.frames[Math.min(frameIndex, clip.frames.length - 1)],
       frameIndex,
     },
   };
