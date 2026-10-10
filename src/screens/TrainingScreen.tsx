@@ -41,6 +41,8 @@ import { unitsPerFrame, worldUnits } from '../physics/units';
 import type { RecoveryState } from '../physics/combat';
 import { classifyNormalAttack, getJabFollowup, getNormalAttackData, getSmashChargeDamageMultiplier, NORMAL_ATTACK_IDS, scaleAttackHitboxes } from '../physics/normalAttacks';
 import type { NormalAttackId } from '../physics/normalAttacks';
+import { falconSpecialAnimationId, falconSpecialArmorFrames, falconSpecialCanBReverse, selectFalconSpecial, specialLandingAnimationId, specialRequiresHelplessFall } from '../physics/specialMoves';
+import type { FalconSpecialCommand } from '../physics/specialMoves';
 import '../styles/TrainingScreen.css';
 
 const TrainingScreen: React.FC = () => {
@@ -106,8 +108,9 @@ const TrainingScreen: React.FC = () => {
   const previewPlaybackRef = useRef(INITIAL_MOVEMENT_ANIMATION_PREVIEW);
   const activeAnimationRef = useRef<MovementAnimationPreviewFrame | null>(null);
   const attackTestRef = useRef<{ clip: AnimationClip; frameIndex: number; moveId: string; damageMultiplier: number } | null>(null);
-  const previousAttackActionsRef = useRef({ attack: false, tilt: false, smash: false, rightStick: false, grab: false });
+  const previousAttackActionsRef = useRef({ attack: false, tilt: false, smash: false, special: false, rightStick: false, grab: false });
   const previousStickMagnitudeRef = useRef(0);
+  const previousSpecialStickRef = useRef({ horizontal: 0, vertical: 0 });
   const stickFlickAgeRef = useRef(99);
   const bufferedAttackRef = useRef<{ id: NormalAttackId; expires: number } | null>(null);
   const lastJabRef = useRef<NormalAttackId | null>(null);
@@ -115,6 +118,10 @@ const TrainingScreen: React.FC = () => {
   const pendingDamageMultiplierRef = useRef(1);
   const shortHopWindowRef = useRef(0);
   const landingLagRef = useRef(0);
+  const specialRecoveryRef = useRef<{ command: FalconSpecialCommand; helpless: boolean } | null>(null);
+  const specialStartFrameRef = useRef<number | null>(null);
+  const specialStartFacingRef = useRef<-1 | 1>(1);
+  const specialBReverseUsedRef = useRef(false);
   const collisionHistoryRef = useRef(new Map<string, CollisionHistory>());
   const forceIdleVarianceRef = useRef(false);
   const pressedKeys = useRef(new Set<string>());
@@ -253,6 +260,11 @@ const TrainingScreen: React.FC = () => {
             controllerTypeRef.current,
           );
           const actions = previousAttackActionsRef.current;
+           const specialPressed = input.actions.special && !actions.special;
+           const neutralTurnaround = specialPressed
+             && previousSpecialStickRef.current.horizontal * movementRef.current.facingDirection < -0.65
+             && Math.abs(input.horizontal) < 0.25 && Math.abs(input.vertical) < 0.65;
+           previousSpecialStickRef.current = { horizontal: input.horizontal, vertical: input.vertical };
           const rightStickHeld = Math.abs(input.rightStickX) > 0.65 || Math.abs(input.rightStickY) > 0.65;
           const rightStickPressed = rightStickHeld && !actions.rightStick;
           const grabPressed = input.actions.grab && !actions.grab;
@@ -261,9 +273,33 @@ const TrainingScreen: React.FC = () => {
             stickFlickAgeRef.current = previousStickMagnitudeRef.current <= 0.25
               ? 0 : stickFlickAgeRef.current + 1;
           } else stickFlickAgeRef.current = 99;
-          const flickKind = Math.abs(input.vertical) > Math.abs(input.horizontal) ? 'vertical-smash' : 'forward-smash';
+          const flickKind = input.actions.special && Math.abs(input.horizontal) > 0.65
+            ? 'side-special'
+            : Math.abs(input.vertical) > Math.abs(input.horizontal) ? 'vertical-smash' : 'forward-smash';
           const flick = magnitude > 0.9 && previousStickMagnitudeRef.current <= 0.65
             && stickFlickAgeRef.current <= getSmashFlickWindowFrames(controllerSettingsRef.current, flickKind);
+          const sideSpecialFlick = magnitude > 0.9 && previousStickMagnitudeRef.current <= 0.65
+            && stickFlickAgeRef.current <= getSmashFlickWindowFrames(controllerSettingsRef.current, 'side-special');
+          const activeSpecial = specialRecoveryRef.current;
+          const specialAge = specialStartFrameRef.current === null
+            ? Infinity
+            : dummyFrameRef.current - specialStartFrameRef.current;
+          if (activeSpecial && !activeSpecial.helpless && !specialBReverseUsedRef.current
+            && falconSpecialCanBReverse(activeSpecial.command)
+            && magnitude > 0.9 && previousStickMagnitudeRef.current <= 0.65
+            && Math.abs(input.horizontal) > 0.65
+            && input.horizontal * specialStartFacingRef.current < -0.65
+            && specialAge >= 0
+            && specialAge <= 1) {
+            movementRef.current = {
+              ...movementRef.current,
+              facingDirection: movementRef.current.facingDirection === 1 ? -1 : 1,
+              velocityX: unitsPerFrame(-Number(movementRef.current.velocityX)),
+            };
+            activeSpecial.command = { ...activeSpecial.command, reversed: true };
+            specialBReverseUsedRef.current = true;
+            setHitReadout(`${activeSpecial.command.move} · B-reversed`);
+          }
           const attackPressed = input.actions.attack && !actions.attack;
           const tiltPressed = input.actions.tilt && !actions.tilt;
           const smashPressed = input.actions.smash && !actions.smash;
@@ -285,7 +321,7 @@ const TrainingScreen: React.FC = () => {
               stickMode: controllerSettingsRef.current.rightStickMode ?? 'smash', flick: false,
             })
             : command;
-          previousAttackActionsRef.current = { attack: input.actions.attack, tilt: input.actions.tilt, smash: input.actions.smash, rightStick: rightStickHeld, grab: input.actions.grab };
+          previousAttackActionsRef.current = { attack: input.actions.attack, tilt: input.actions.tilt, smash: input.actions.smash, special: input.actions.special, rightStick: rightStickHeld, grab: input.actions.grab };
           previousStickMagnitudeRef.current = magnitude;
           const buffered = bufferedAttackRef.current;
           if (buffered && buffered.expires <= 0) bufferedAttackRef.current = null;
@@ -320,7 +356,7 @@ const TrainingScreen: React.FC = () => {
             : 0;
           if (requestedAttack && !mayInterrupt && remainingToActionable <= 9) bufferedAttackRef.current = { id: requestedAttack, expires: 9 };
           const launchAttack = landingLagRef.current > 0 ? null : mayInterrupt ? (requestedAttack ?? bufferedAttackRef.current?.id ?? null) : null;
-          if (launchAttack) {
+          if (launchAttack && !specialRecoveryRef.current?.helpless) {
             bufferedAttackRef.current = null;
             if (launchAttack.startsWith('jab')) lastJabRef.current = launchAttack;
             const isAerial = ['nair', 'fair', 'bair', 'uair', 'dair'].includes(launchAttack);
@@ -332,6 +368,49 @@ const TrainingScreen: React.FC = () => {
               attackTestRef.current = { clip, frameIndex: -1, moveId: clip.animationId, damageMultiplier: pendingDamageMultiplierRef.current };
               pendingDamageMultiplierRef.current = 1;
               setHitReadout(`${getNormalAttackData(launchAttack).label} · ${clip.source === 'default' ? 'DEFAULT SHAPES · NOT APPROVED' : clip.source === 'approved' ? 'APPROVED DATA' : 'DRAFT'} · target at 16 u`);
+              setJabTestActive(true);
+            });
+          }
+          if (specialPressed && !attackTestRef.current && !specialRecoveryRef.current?.helpless
+            && !ledgeStateRef.current.side && landingLagRef.current === 0) {
+            const selected = neutralTurnaround
+              ? selectFalconSpecial({ ...input, horizontal: 0 }, movementRef.current.isGrounded, movementRef.current.facingDirection, sideSpecialFlick)
+              : selectFalconSpecial(input, movementRef.current.isGrounded, movementRef.current.facingDirection, sideSpecialFlick);
+            const command = neutralTurnaround
+              ? { ...selected, reversed: true }
+              : selected;
+            const animationId = falconSpecialAnimationId(command);
+            specialRecoveryRef.current = { command, helpless: false };
+            specialStartFrameRef.current = dummyFrameRef.current;
+            specialStartFacingRef.current = movementRef.current.facingDirection;
+            specialBReverseUsedRef.current = command.reversed;
+            const nextFacing = command.reversed
+              ? (movementRef.current.facingDirection === 1 ? -1 : 1)
+              : movementRef.current.facingDirection;
+            const travelDirection = command.wavebounce ? -nextFacing : nextFacing;
+            if (command.move !== 'falcon-punch' && (command.move === 'falcon-dive' || command.aerial)) {
+              movementRef.current = {
+                ...movementRef.current,
+                isGrounded: false,
+                velocityX: unitsPerFrame(command.move === 'falcon-kick' ? travelDirection * 2.8 : command.move === 'raptor-boost' ? travelDirection * 3.2 : 0),
+                velocityY: unitsPerFrame(command.move === 'falcon-dive' ? 3.2 : command.move === 'falcon-kick' && command.aerial ? -2.4 : Number(movementRef.current.velocityY)),
+                facingDirection: nextFacing,
+              };
+            } else if (command.move === 'raptor-boost' || command.move === 'falcon-kick') {
+              movementRef.current = {
+                ...movementRef.current,
+                facingDirection: nextFacing,
+                velocityX: unitsPerFrame(travelDirection * 3.2),
+              };
+            }
+            void import('../data/falcon/trainingClips').then(({ resolveAnimationClip }) => {
+              const clip = resolveAnimationClip(animationId);
+              if (!clip) return;
+              collisionHistoryRef.current.clear();
+              attackTestRef.current = { clip, frameIndex: -1, moveId: animationId, damageMultiplier: 1 };
+              setHitReadout(`${clip.animationId}${command.wavebounce ? ' · wavebounce' : ''}${command.smashedSideInput ? ' · smashed side-special' : ''} · SmashWiki data`);
+              const armor = falconSpecialArmorFrames(command);
+              if (armor) setHitReadout(`${clip.animationId} · ${armor[0]}–${armor[1]}f damage-based armor on hit phase · SmashWiki`);
               setJabTestActive(true);
             });
           }
@@ -350,19 +429,38 @@ const TrainingScreen: React.FC = () => {
           }
           const playerInHitlag = playerHitlagFramesRef.current > 0;
           if (playerInHitlag) playerHitlagFramesRef.current -= 1;
-          else if ((!attackTestRef.current || !movementRef.current.isGrounded) && landingLagRef.current === 0 && !ledgeStateRef.current.side) {
+          else if ((!attackTestRef.current || !movementRef.current.isGrounded
+            || (specialRecoveryRef.current && !specialRecoveryRef.current.helpless
+              && (specialRecoveryRef.current.command.move === 'raptor-boost'
+                || specialRecoveryRef.current.command.move === 'falcon-kick')))
+            && landingLagRef.current === 0 && !ledgeStateRef.current.side) {
             const wasGrounded = movementRef.current.isGrounded;
-            movementRef.current = stepTrainingMovement(movementRef.current, input, controllerSettingsRef.current);
+            const activeSpecial = specialRecoveryRef.current;
+            const movementInput = activeSpecial?.helpless || landingLagRef.current > 0
+              ? { ...input, jumpPressed: false, jumpHeld: false, stickJumpAction: false }
+              : activeSpecial && !activeSpecial.command.aerial
+                && (activeSpecial.command.move === 'raptor-boost' || activeSpecial.command.move === 'falcon-kick')
+                ? { ...input, horizontal: movementRef.current.facingDirection, isDigital: true }
+                : input;
+            movementRef.current = stepTrainingMovement(movementRef.current, movementInput, controllerSettingsRef.current);
             if (movementRef.current.isGrounded) {
               if (ledgeStateRef.current.grabCount) ledgeStateRef.current = createLedgeRecoveryState();
             } else {
               const falling = { ...ledgeStateRef.current, airtimeFrames: ledgeStateRef.current.airtimeFrames + 1 };
               ledgeStateRef.current = falling;
-              const side = detectLedgeGrab(Number(movementRef.current.positionX), Number(movementRef.current.positionY), Number(movementRef.current.velocityY), true);
+              const upSpecialCanSnap = specialRecoveryRef.current?.command.move === 'falcon-dive'
+                && Number(movementRef.current.velocityY) > 0;
+              const side = detectLedgeGrab(
+                Number(movementRef.current.positionX),
+                Number(movementRef.current.positionY),
+                upSpecialCanSnap ? -1 : Number(movementRef.current.velocityY),
+                true,
+              );
               if (side !== null) {
                 const grabbed = grabLedge(falling, side, falling.airtimeFrames, ledgePercentRef.current);
                 if (grabbed) {
                   ledgeStateRef.current = grabbed;
+                  specialRecoveryRef.current = null;
                   movementRef.current = { ...movementRef.current, positionX: snapLedgePosition(side), positionY: worldUnits(0), velocityX: unitsPerFrame(0), velocityY: unitsPerFrame(0), facingDirection: side === 1 ? -1 : 1 };
                   setLedgeReadout(`Hanging ${side > 0 ? 'right' : 'left'} · ${grabbed.intangibilityFrames}f grab intangibility`);
                   void import('../data/falcon/trainingClips').then(({ resolveAnimationClip }) => {
@@ -374,7 +472,24 @@ const TrainingScreen: React.FC = () => {
             }
             if (wasGrounded && !movementRef.current.isGrounded && movementRef.current.jumpInitialFramesRemaining === 0) shortHopWindowRef.current = 7;
             if (shortHopWindowRef.current > 0) shortHopWindowRef.current -= 1;
-            if (!wasGrounded && movementRef.current.isGrounded && attackTestRef.current) {
+            if (!wasGrounded && movementRef.current.isGrounded && specialRecoveryRef.current
+              && (specialRecoveryRef.current.helpless || specialRecoveryRef.current.command.aerial)) {
+              const recovery = specialRecoveryRef.current;
+              const landingId = specialLandingAnimationId(recovery.command);
+              specialRecoveryRef.current = null;
+              if (landingId) {
+                void import('../data/falcon/trainingClips').then(({ resolveAnimationClip }) => {
+                  const clip = resolveAnimationClip(landingId);
+                  if (!clip) return;
+                  attackTestRef.current = { clip, frameIndex: -1, moveId: landingId, damageMultiplier: 1 };
+                  landingLagRef.current = clip.frames.length;
+                  setJabTestActive(true);
+                  setHitReadout(`${clip.animationId} · landing recovery ${clip.frames.length}f`);
+                });
+              }
+            }
+            if (!wasGrounded && movementRef.current.isGrounded && attackTestRef.current
+              && NORMAL_ATTACK_IDS.includes(attackTestRef.current.moveId as NormalAttackId)) {
               const aerialData = getNormalAttackData(attackTestRef.current.moveId as NormalAttackId);
               if (['nair', 'fair', 'bair', 'uair', 'dair'].includes(aerialData.id)) {
                 const autoCancelled = aerialData.autoCancelFrames.includes(attackTestRef.current.frameIndex + 1);
@@ -519,7 +634,13 @@ const TrainingScreen: React.FC = () => {
           if (test && !playerInHitlag) {
             const nextFrame = test.frameIndex + 1;
             if (nextFrame >= test.clip.frames.length) {
-              if (test.moveId === 'rapid-jab' && input.actions.attack) {
+              const recovery = specialRecoveryRef.current;
+              if (recovery && specialRequiresHelplessFall(recovery.command) && !movementRef.current.isGrounded) {
+                attackTestRef.current = null;
+                recovery.helpless = true;
+                setJabTestActive(false);
+                setHitReadout('Helpless fall · jump and specials locked until landing or ledge');
+              } else if (test.moveId === 'rapid-jab' && input.actions.attack) {
                 test.frameIndex = -1;
               } else if (test.moveId === 'rapid-jab') {
                 void import('../data/falcon/trainingClips').then(({ resolveAnimationClip }) => {
@@ -528,6 +649,7 @@ const TrainingScreen: React.FC = () => {
                 });
               } else {
                 attackTestRef.current = null;
+                if (recovery) specialRecoveryRef.current = null;
                 setJabTestActive(false);
                 setAttackFramePreview(null);
               }
@@ -535,11 +657,18 @@ const TrainingScreen: React.FC = () => {
               test.frameIndex = nextFrame;
               const frame = test.clip.frames[nextFrame];
               setAttackFramePreview(frame);
+              const isRaptorDetector = test.moveId === 'raptor-boost' || test.moveId === 'raptor-boost-air';
+              const specialHitboxes = test.moveId === 'falcon-dive-catch'
+                ? frame.hitboxes.map((hitbox) => ({
+                  ...hitbox, damage: 13, angle: 50, baseKnockback: 85, knockbackGrowth: 62,
+                  attackType: 'Throwing' as const,
+                }))
+                : isRaptorDetector ? frame.hitboxes.filter((hitbox) => hitbox.effect !== 'Inert') : frame.hitboxes;
               const attacker: CombatantFrame = {
                 id: 'player-1', moveId: test.moveId, frame: nextFrame + 1,
                 position: { x: Number(movementRef.current.positionX), y: Number(movementRef.current.positionY), z: 0 },
                 facing: movementRef.current.facingDirection, grounded: movementRef.current.isGrounded,
-                hitboxes: scaleAttackHitboxes(frame.hitboxes, test.damageMultiplier),
+                hitboxes: scaleAttackHitboxes(specialHitboxes, test.damageMultiplier),
                 hurtboxes: frame.hurtboxes.length ? frame.hurtboxes : defaultTrainingHurtboxes(),
               };
               const phase = dummyFrameRef.current;
@@ -584,6 +713,26 @@ const TrainingScreen: React.FC = () => {
                   ...box, state: dummyInvincibleFramesRef.current > 0 ? 'invincible' : dodging ? 'intangible' : box.state,
                 })),
               };
+              let transitionedSpecial = false;
+              if (isRaptorDetector && frame.hitboxes.some((hitbox) =>
+                target.hurtboxes.some((hurtbox) => capsulesOverlap(hitbox, attacker, hurtbox, target)),
+              )) {
+                const hitId = test.moveId === 'raptor-boost-air' ? 'raptor-boost-air-hit' : 'raptor-boost-hit';
+                void import('../data/falcon/trainingClips').then(({ resolveAnimationClip }) => {
+                  const clip = resolveAnimationClip(hitId);
+                  if (clip) attackTestRef.current = { clip, frameIndex: -1, moveId: hitId, damageMultiplier: 1 };
+                });
+                transitionedSpecial = true;
+              }
+              if (test.moveId === 'falcon-dive' && frame.grabboxes.some((grabbox) =>
+                target.hurtboxes.some((hurtbox) => capsulesOverlap(grabbox, attacker, hurtbox, target)),
+              )) {
+                void import('../data/falcon/trainingClips').then(({ resolveAnimationClip }) => {
+                  const clip = resolveAnimationClip('falcon-dive-catch');
+                  if (clip) attackTestRef.current = { clip, frameIndex: -1, moveId: 'falcon-dive-catch', damageMultiplier: 1 };
+                });
+                transitionedSpecial = true;
+              }
               const grabMove = ['grab', 'dash-grab', 'pivot-grab'].includes(test.moveId);
               const grabHit = grabMove && !dodging && dummyInvincibleFramesRef.current <= 0
                 && frame.grabboxes.some((grabbox) =>
@@ -595,7 +744,9 @@ const TrainingScreen: React.FC = () => {
                 setDummyGrabbed(true);
                 setHitReadout(`Grabbed · ${grabHoldFramesRef.current}f to escape · mash to break free`);
               }
-              const collision = resolveHitboxCollisions([attacker, target], collisionHistoryRef.current);
+              const collision = transitionedSpecial
+                ? { hits: [], clashes: [] }
+                : resolveHitboxCollisions([attacker, target], collisionHistoryRef.current);
               const hit = collision.hits[0];
               if (hit) {
                 if (hit.effect === 'hit') {
@@ -713,7 +864,9 @@ const TrainingScreen: React.FC = () => {
   const fighterHeightPercent = worldToMapY(Number(movement.positionY));
   const speed = Math.abs(Number(movement.velocityX));
   const verticalSpeed = Math.abs(Number(movement.velocityY));
-  const modeLabel = animationPreview?.motionState === 'idle-variance'
+  const modeLabel = specialRecoveryRef.current?.helpless
+    ? 'HELPLESS'
+    : animationPreview?.motionState === 'idle-variance'
     ? 'IDLE VARIANCE'
     : movement.jumpSquatFramesRemaining > 0
     ? `JUMP SQUAT · ${movement.jumpSquatFramesRemaining}`
@@ -1140,6 +1293,7 @@ const TrainingScreen: React.FC = () => {
           <p><strong>Move:</strong> A / D, your rebinds, or the gamepad D-pad or left stick.</p>
           <p><strong>Analog:</strong> light tilt walks at a scaled speed; a quick full flick dashes; holding full tilt runs.</p>
           <p><strong>Jump:</strong> J / Space, your jump rebinds, or enabled Stick Jump. Hold through the 3-frame squat for a full hop; release during it for a short hop. Press jump again in the air for Falcon’s midair jump.</p>
+          <p><strong>Specials:</strong> Special + neutral = Falcon Punch, sideways = Raptor Boost, up = Falcon Dive, down = Falcon Kick. Tap backward before Punch for its turnaround; eligible specials can B-reverse on the next-frame flick, and side/down reversals support wavebounce momentum. Air Raptor Boost, Falcon Dive, and Falcon Kick enter helpless fall; landing plays their move-specific recovery. Side-special flick windows follow Controller Settings. <a href="https://www.ssbwiki.com/Neutral_special" target="_blank" rel="noreferrer">Punch ↗</a> · <a href="https://www.ssbwiki.com/Side_special" target="_blank" rel="noreferrer">Raptor Boost ↗</a> · <a href="https://www.ssbwiki.com/Up_special" target="_blank" rel="noreferrer">Falcon Dive ↗</a> · <a href="https://www.ssbwiki.com/Down_special" target="_blank" rel="noreferrer">Falcon Kick ↗</a> · <a href="https://www.ssbwiki.com/Wavebounce" target="_blank" rel="noreferrer">Reversal rules ↗</a></p>
           <p><strong>Camera:</strong> toggle follow on to track the fighter within the inner camera limits; turn it off to keep the camera at stage center.</p>
           <p><strong>Stage view:</strong> use Blastzone to see the full field or Camera limits to zoom into the inner bounds.</p>
           <p><strong>Fall:</strong> walk or run off either ledge. Hold your down binding (S by default) or tilt the stick down while falling to fast-fall.</p>
