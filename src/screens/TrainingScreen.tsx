@@ -35,6 +35,9 @@ import type { CombatantRuntime, HitReaction } from '../physics/combat';
 import { chooseGetup } from '../physics/combat';
 import { applyShieldHit, createShieldState, dodgeIsIntangible, dodgeLandingLagFrames, dodgeTiming, dropShield, grabHoldFrames, mashGrabEscape, outOfShieldLag, stepShield } from '../physics/defense';
 import type { ShieldState } from '../physics/defense';
+import { canChooseLedgeOption, chooseLedgeOption, createLedgeRecoveryState, detectLedgeGrab, grabLedge, ledgeHangLimit, LEDGE_ANIMATION_IDS, ledgeOptionIntangible, snapLedgePosition, stepLedge } from '../physics/ledgeRecovery';
+import type { LedgeOption, LedgeRecoveryState } from '../physics/ledgeRecovery';
+import { unitsPerFrame, worldUnits } from '../physics/units';
 import type { RecoveryState } from '../physics/combat';
 import { classifyNormalAttack, getJabFollowup, getNormalAttackData, getSmashChargeDamageMultiplier, NORMAL_ATTACK_IDS, scaleAttackHitboxes } from '../physics/normalAttacks';
 import type { NormalAttackId } from '../physics/normalAttacks';
@@ -76,6 +79,10 @@ const TrainingScreen: React.FC = () => {
   const dummyShieldRef = useRef<ShieldState>(createShieldState());
   const [dummyShieldHealth, setDummyShieldHealth] = useState(50);
   const [dummyDodgeLandingLag, setDummyDodgeLandingLag] = useState(0);
+  const [ledgeReadout, setLedgeReadout] = useState('No ledge grab');
+  const ledgeStateRef = useRef<LedgeRecoveryState>(createLedgeRecoveryState());
+  const [ledgePercent, setLedgePercent] = useState(0);
+  const ledgePercentRef = useRef(0);
   const dummyGrabbedRef = useRef(false);
   const grabHoldFramesRef = useRef(0);
   const dummyDodgeLandingLagRef = useRef(0);
@@ -301,14 +308,15 @@ const TrainingScreen: React.FC = () => {
             requestedAttack = null;
           }
           const currentAttack = attackTestRef.current;
-          const currentAttackData = currentAttack ? getNormalAttackData(currentAttack.moveId as NormalAttackId) : null;
+           const currentAttackData = currentAttack && NORMAL_ATTACK_IDS.includes(currentAttack.moveId as NormalAttackId)
+             ? getNormalAttackData(currentAttack.moveId as NormalAttackId) : null;
           const jabCancel = currentAttack && requestedAttack?.startsWith('jab-')
             && (currentAttack.moveId === 'jab-1' || currentAttack.moveId === 'jab-2')
             && currentAttack.frameIndex + 1 >= (currentAttackData?.activeFrames.at(-1) ?? Infinity);
           const mayInterrupt = !currentAttack || jabCancel
             || currentAttack.frameIndex + 1 >= (currentAttackData?.firstActionableFrame ?? Infinity);
-          const remainingToActionable = currentAttack
-            ? getNormalAttackData(currentAttack.moveId as NormalAttackId).firstActionableFrame - (currentAttack.frameIndex + 1)
+           const remainingToActionable = currentAttack && currentAttackData
+             ? currentAttackData.firstActionableFrame - (currentAttack.frameIndex + 1)
             : 0;
           if (requestedAttack && !mayInterrupt && remainingToActionable <= 9) bufferedAttackRef.current = { id: requestedAttack, expires: 9 };
           const launchAttack = landingLagRef.current > 0 ? null : mayInterrupt ? (requestedAttack ?? bufferedAttackRef.current?.id ?? null) : null;
@@ -342,9 +350,28 @@ const TrainingScreen: React.FC = () => {
           }
           const playerInHitlag = playerHitlagFramesRef.current > 0;
           if (playerInHitlag) playerHitlagFramesRef.current -= 1;
-          else if ((!attackTestRef.current || !movementRef.current.isGrounded) && landingLagRef.current === 0) {
+          else if ((!attackTestRef.current || !movementRef.current.isGrounded) && landingLagRef.current === 0 && !ledgeStateRef.current.side) {
             const wasGrounded = movementRef.current.isGrounded;
             movementRef.current = stepTrainingMovement(movementRef.current, input, controllerSettingsRef.current);
+            if (movementRef.current.isGrounded) {
+              if (ledgeStateRef.current.grabCount) ledgeStateRef.current = createLedgeRecoveryState();
+            } else {
+              const falling = { ...ledgeStateRef.current, airtimeFrames: ledgeStateRef.current.airtimeFrames + 1 };
+              ledgeStateRef.current = falling;
+              const side = detectLedgeGrab(Number(movementRef.current.positionX), Number(movementRef.current.positionY), Number(movementRef.current.velocityY), true);
+              if (side !== null) {
+                const grabbed = grabLedge(falling, side, falling.airtimeFrames, ledgePercentRef.current);
+                if (grabbed) {
+                  ledgeStateRef.current = grabbed;
+                  movementRef.current = { ...movementRef.current, positionX: snapLedgePosition(side), positionY: worldUnits(0), velocityX: unitsPerFrame(0), velocityY: unitsPerFrame(0), facingDirection: side === 1 ? -1 : 1 };
+                  setLedgeReadout(`Hanging ${side > 0 ? 'right' : 'left'} · ${grabbed.intangibilityFrames}f grab intangibility`);
+                  void import('../data/falcon/trainingClips').then(({ resolveAnimationClip }) => {
+                    const clip = resolveAnimationClip('ledge-catch');
+                    if (clip) { attackTestRef.current = { clip, frameIndex: -1, moveId: 'ledge-catch', damageMultiplier: 1 }; setJabTestActive(true); }
+                  });
+                }
+              }
+            }
             if (wasGrounded && !movementRef.current.isGrounded && movementRef.current.jumpInitialFramesRemaining === 0) shortHopWindowRef.current = 7;
             if (shortHopWindowRef.current > 0) shortHopWindowRef.current -= 1;
             if (!wasGrounded && movementRef.current.isGrounded && attackTestRef.current) {
@@ -358,6 +385,58 @@ const TrainingScreen: React.FC = () => {
                 setJabTestActive(false);
                 setAttackFramePreview(null);
               }
+            }
+          }
+          if (ledgeStateRef.current.side !== null) {
+            let option: LedgeOption | null = null;
+            if (canChooseLedgeOption(ledgeStateRef.current)) {
+              if (input.jumpPressed) option = 'jump';
+              else if (attackPressed) option = 'attack';
+              else if (input.actions.shield) option = 'roll';
+              else if (input.vertical > 0.65) option = 'getup';
+              else if (input.vertical < -0.65 || grabPressed || input.horizontal * ledgeStateRef.current.side > 0.75) option = 'drop';
+            }
+            const before = ledgeStateRef.current.option;
+            if (option) ledgeStateRef.current = chooseLedgeOption(ledgeStateRef.current, option);
+            const current = ledgeStateRef.current;
+            if (current.option && current.optionFrame === 0 && !before) {
+              const id = LEDGE_ANIMATION_IDS[current.option];
+              void import('../data/falcon/trainingClips').then(({ resolveAnimationClip }) => {
+                const clip = resolveAnimationClip(id);
+                if (clip) {
+                  attackTestRef.current = { clip, frameIndex: -1, moveId: id, damageMultiplier: 1 };
+                  setJabTestActive(true);
+                }
+              });
+            }
+            const next = stepLedge(current);
+            if (current.option && next.side === null) {
+              const side = current.side!;
+              const action = current.option;
+              const offset = action === 'roll' ? 14 : 4;
+              movementRef.current = {
+                ...movementRef.current,
+                positionX: (Number(snapLedgePosition(side)) + side * (action === 'drop' ? 9 : -offset)) as typeof movementRef.current.positionX,
+                positionY: action === 'jump' || action === 'drop' ? worldUnits(-1) : worldUnits(0),
+                velocityY: unitsPerFrame(action === 'jump' ? 4 : action === 'drop' ? -1 : 0),
+                velocityX: unitsPerFrame(0),
+                isGrounded: action !== 'jump' && action !== 'drop',
+                jumpsUsed: action === 'jump' ? 1 : movementRef.current.jumpsUsed,
+              };
+              attackTestRef.current = null;
+              setJabTestActive(false);
+              setLedgeReadout(`${action} complete · regrabs ${current.grabCount}/6`);
+            } else if (next.option === null && next.hangFrames >= ledgeHangLimit(ledgePercentRef.current)) {
+              const side = next.side!;
+              movementRef.current = { ...movementRef.current, positionX: (Number(snapLedgePosition(side)) + side * 9) as typeof movementRef.current.positionX, positionY: worldUnits(-1), velocityY: unitsPerFrame(-1) };
+              ledgeStateRef.current = { ...createLedgeRecoveryState(), grabCount: next.grabCount, airtimeFrames: next.airtimeFrames };
+              setLedgeReadout('Hang limit reached · dropped');
+            } else {
+              ledgeStateRef.current = next;
+              const intangible = ledgeOptionIntangible(next);
+              setLedgeReadout(next.option
+                ? `${next.option} · frame ${next.optionFrame}${intangible ? ' · intangible' : ''}`
+                : `Hanging ${(next.side ?? current.side!) > 0 ? 'right' : 'left'} · ${next.intangibilityFrames}f intangibility`);
             }
           }
           dummyFrameRef.current += 1;
@@ -1057,12 +1136,16 @@ const TrainingScreen: React.FC = () => {
         </div>
 
         <div className="training-instructions">
+          <label className="training-settings-button">Falcon damage % <input type="number" min="0" max="999" value={ledgePercent} onChange={(event) => { const value = Math.max(0, Number(event.target.value) || 0); ledgePercentRef.current = value; setLedgePercent(value); }} style={{ width: '4rem' }} /></label>
           <p><strong>Move:</strong> A / D, your rebinds, or the gamepad D-pad or left stick.</p>
           <p><strong>Analog:</strong> light tilt walks at a scaled speed; a quick full flick dashes; holding full tilt runs.</p>
           <p><strong>Jump:</strong> J / Space, your jump rebinds, or enabled Stick Jump. Hold through the 3-frame squat for a full hop; release during it for a short hop. Press jump again in the air for Falcon’s midair jump.</p>
           <p><strong>Camera:</strong> toggle follow on to track the fighter within the inner camera limits; turn it off to keep the camera at stage center.</p>
           <p><strong>Stage view:</strong> use Blastzone to see the full field or Camera limits to zoom into the inner bounds.</p>
           <p><strong>Fall:</strong> walk or run off either ledge. Hold your down binding (S by default) or tilt the stick down while falling to fast-fall.</p>
+          <p><strong>Ledge recovery:</strong> snap to a ledge while falling. After grab recovery: up = getup, shield = roll, jump = ledge jump, attack = Falcon’s ledge attack, down/back = drop. {ledgeReadout}</p>
+          <p><strong>Needs confirmation:</strong> snap envelope ±8u; estimated Falcon animation counts: getup 33f, roll 49f, jump 20f, drop 6f; non-attack option intangibility is not sourced yet. Grab intangibility, 19f initial action lockout, 6-grab limit and 390/300f hang times use SmashWiki; ledge attack uses Falcon’s Edge_attack data.</p>
+          <p><a href="https://www.ssbwiki.com/Ledge" target="_blank" rel="noreferrer">SmashWiki ledge rules</a> · <a href="https://www.ssbwiki.com/Edge_attack" target="_blank" rel="noreferrer">Captain Falcon ledge attack data</a></p>
           <p><strong>Omega platform:</strong> {Number(TRAINING_STAGE_WIDTH)} u wide, with open ledges at ±{Number(TRAINING_STAGE_HALF_WIDTH)} u.</p>
           <p><strong>Captain Falcon:</strong> gravity {Number(CAPTAIN_FALCON_MOVEMENT.gravity).toFixed(2)} u/frame² · walk {Number(CAPTAIN_FALCON_MOVEMENT.walkSpeed).toFixed(3)} · initial dash {Number(CAPTAIN_FALCON_MOVEMENT.initialDashSpeed).toFixed(3)} · run {Number(CAPTAIN_FALCON_MOVEMENT.runSpeed).toFixed(3)} · fall {Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed).toFixed(3)} · fast fall {Number(CAPTAIN_FALCON_MOVEMENT.fastFallSpeed).toFixed(3)} u/frame.</p>
           <p><strong>Jump heights:</strong> full hop {Number(CAPTAIN_FALCON_MOVEMENT.fullHopHeight)} u · first-four-frame height {Number(CAPTAIN_FALCON_MOVEMENT.jumpInitialHeight)} u · short hop {Number(CAPTAIN_FALCON_MOVEMENT.shortHopHeight)} u · one midair jump {Number(CAPTAIN_FALCON_MOVEMENT.airJumpHeight)} u.</p>
