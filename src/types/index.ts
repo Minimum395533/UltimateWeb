@@ -28,6 +28,7 @@ export interface PlayerControllerSettings {
   abSmashEnabled: boolean;
   stickJumpEnabled: boolean;
   stickSensitivity: 'low' | 'normal' | 'high';
+  rightStickMode?: 'smash' | 'tilt';
 }
 
 export type ControllerType = 'pro' | 'gamecube' | 'joycon-sideways' | 'keyboard';

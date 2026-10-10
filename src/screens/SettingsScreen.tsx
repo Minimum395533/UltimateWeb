@@ -154,6 +154,16 @@ const SettingsScreen: React.FC = () => {
               <option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option>
             </select>
           </div>
+          <div className="setting-row sensitivity-setting">
+            <label htmlFor="right-stick-mode">Right stick</label>
+            <select id="right-stick-mode" className="setting-input"
+              value={controllerSettings.rightStickMode}
+              onChange={(event) => updateControllerSettings({
+                rightStickMode: event.target.value as 'smash' | 'tilt',
+              })}>
+              <option value="smash">Smash attacks</option><option value="tilt">Tilt attacks</option>
+            </select>
+          </div>
           <p className="controller-setting-help">
             Flick windows: forward smash {getSmashFlickWindowFrames(controllerSettings, 'forward-smash')}f · up/down smash {getSmashFlickWindowFrames(controllerSettings, 'vertical-smash')}f · side special {getSmashFlickWindowFrames(controllerSettings, 'side-special')}f. Dash, stick jump, fast fall, and platform drops are unchanged.
           </p>

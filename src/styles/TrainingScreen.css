@@ -68,6 +68,31 @@
   font-size: 0.92rem;
 }
 
+.normal-attack-controls {
+  width: min(100%, 430px);
+  margin-top: 8px;
+  white-space: normal;
+}
+
+.normal-attack-controls small {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 0.64rem;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.normal-attack-controls .training-settings-button {
+  max-width: 100%;
+  white-space: normal;
+}
+
+.normal-attack-controls select {
+  max-width: 100%;
+}
+
 .training-settings-button {
   display: block;
   margin: 10px 0 0 auto;

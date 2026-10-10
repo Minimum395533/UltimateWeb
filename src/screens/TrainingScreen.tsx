@@ -5,7 +5,7 @@ import { DEFAULT_KEYBINDS_KEYBOARD_P1 } from '../types';
 import type { PlayerButtonSettings, PlayerKeybinds } from '../types';
 import type { AnimationDraft } from '../types/frameData';
 import type { AnimationFrame } from '../types/frameData';
-import { normalizeControllerSettings } from '../physics/controllerSettings';
+import { getSmashFlickWindowFrames, normalizeControllerSettings } from '../physics/controllerSettings';
 import {
   CAPTAIN_FALCON_MOVEMENT,
   TRAINING_BLASTZONE_BOUNDS,
@@ -34,6 +34,8 @@ import { applyDirectionalInfluence, applyReaction, calculateHitReaction, CAPTAIN
 import type { CombatantRuntime, HitReaction } from '../physics/combat';
 import { chooseGetup } from '../physics/combat';
 import type { RecoveryState } from '../physics/combat';
+import { classifyNormalAttack, getJabFollowup, getNormalAttackData, getSmashChargeDamageMultiplier, NORMAL_ATTACK_IDS, scaleAttackHitboxes } from '../physics/normalAttacks';
+import type { NormalAttackId } from '../physics/normalAttacks';
 import '../styles/TrainingScreen.css';
 
 const TrainingScreen: React.FC = () => {
@@ -56,6 +58,7 @@ const TrainingScreen: React.FC = () => {
   const [showCollisionShapes, setShowCollisionShapes] = useState(false);
   const [hitReadout, setHitReadout] = useState('No hits registered');
   const [jabTestActive, setJabTestActive] = useState(false);
+  const [selectedAttack, setSelectedAttack] = useState<NormalAttackId>('jab-1');
   const [attackFramePreview, setAttackFramePreview] = useState<AnimationFrame | null>(null);
   const [dummyPercent, setDummyPercent] = useState(0);
   const [comboCount, setComboCount] = useState(0);
@@ -85,7 +88,16 @@ const TrainingScreen: React.FC = () => {
   const clipsRef = useRef<TrainingClips>({});
   const previewPlaybackRef = useRef(INITIAL_MOVEMENT_ANIMATION_PREVIEW);
   const activeAnimationRef = useRef<MovementAnimationPreviewFrame | null>(null);
-  const attackTestRef = useRef<{ clip: AnimationClip; frameIndex: number; moveId: string } | null>(null);
+  const attackTestRef = useRef<{ clip: AnimationClip; frameIndex: number; moveId: string; damageMultiplier: number } | null>(null);
+  const previousAttackActionsRef = useRef({ attack: false, tilt: false, smash: false, rightStick: false });
+  const previousStickMagnitudeRef = useRef(0);
+  const stickFlickAgeRef = useRef(99);
+  const bufferedAttackRef = useRef<{ id: NormalAttackId; expires: number } | null>(null);
+  const lastJabRef = useRef<NormalAttackId | null>(null);
+  const smashChargeRef = useRef<{ id: NormalAttackId; frames: number } | null>(null);
+  const pendingDamageMultiplierRef = useRef(1);
+  const shortHopWindowRef = useRef(0);
+  const landingLagRef = useRef(0);
   const collisionHistoryRef = useRef(new Map<string, CollisionHistory>());
   const forceIdleVarianceRef = useRef(false);
   const pressedKeys = useRef(new Set<string>());
@@ -223,13 +235,107 @@ const TrainingScreen: React.FC = () => {
             buttonSettingsRef.current,
             controllerTypeRef.current,
           );
+          const actions = previousAttackActionsRef.current;
+          const rightStickHeld = Math.abs(input.rightStickX) > 0.65 || Math.abs(input.rightStickY) > 0.65;
+          const rightStickPressed = rightStickHeld && !actions.rightStick;
+          const magnitude = Math.max(Math.abs(input.horizontal), Math.abs(input.vertical));
+          if (magnitude > 0.25) {
+            stickFlickAgeRef.current = previousStickMagnitudeRef.current <= 0.25
+              ? 0 : stickFlickAgeRef.current + 1;
+          } else stickFlickAgeRef.current = 99;
+          const flickKind = Math.abs(input.vertical) > Math.abs(input.horizontal) ? 'vertical-smash' : 'forward-smash';
+          const flick = magnitude > 0.9 && previousStickMagnitudeRef.current <= 0.65
+            && stickFlickAgeRef.current <= getSmashFlickWindowFrames(controllerSettingsRef.current, flickKind);
+          const attackPressed = input.actions.attack && !actions.attack;
+          const tiltPressed = input.actions.tilt && !actions.tilt;
+          const smashPressed = input.actions.smash && !actions.smash;
+          const command = classifyNormalAttack({
+            attackPressed, tiltPressed, smashPressed,
+            horizontal: input.horizontal * movementRef.current.facingDirection, vertical: input.vertical,
+            rightX: input.rightStickX * movementRef.current.facingDirection, rightY: input.rightStickY,
+            airborne: !movementRef.current.isGrounded,
+            dashAttack: attackPressed && (movementRef.current.mode === 'run' || movementRef.current.mode === 'initial-dash'),
+            stickMode: controllerSettingsRef.current.rightStickMode ?? 'smash',
+            flick,
+          });
+          const selectedCommand = rightStickPressed && !command
+            ? classifyNormalAttack({
+              attackPressed: true, tiltPressed: false, smashPressed: false,
+              horizontal: input.horizontal * movementRef.current.facingDirection, vertical: input.vertical,
+              rightX: input.rightStickX * movementRef.current.facingDirection, rightY: input.rightStickY,
+              airborne: !movementRef.current.isGrounded, dashAttack: false,
+              stickMode: controllerSettingsRef.current.rightStickMode ?? 'smash', flick: false,
+            })
+            : command;
+          previousAttackActionsRef.current = { attack: input.actions.attack, tilt: input.actions.tilt, smash: input.actions.smash, rightStick: rightStickHeld };
+          previousStickMagnitudeRef.current = magnitude;
+          const buffered = bufferedAttackRef.current;
+          if (buffered && buffered.expires <= 0) bufferedAttackRef.current = null;
+          else if (buffered) buffered.expires -= 1;
+          let requestedAttack = selectedCommand;
+          if (smashPressed && selectedCommand) smashChargeRef.current = { id: selectedCommand, frames: 0 };
+          if (input.actions.smash && smashChargeRef.current) {
+            smashChargeRef.current.frames = Math.min(60, smashChargeRef.current.frames + 1);
+            requestedAttack = null;
+          } else if (actions.smash && !input.actions.smash && smashChargeRef.current) {
+            requestedAttack = smashChargeRef.current.id;
+            pendingDamageMultiplierRef.current = getSmashChargeDamageMultiplier(smashChargeRef.current.frames);
+            smashChargeRef.current = null;
+          }
+          if (requestedAttack === 'jab-1' && attackPressed && lastJabRef.current) {
+            requestedAttack = getJabFollowup(lastJabRef.current, input.actions.attack) ?? 'jab-1';
+          }
+          if (landingLagRef.current > 0) {
+            landingLagRef.current -= 1;
+            requestedAttack = null;
+          }
+          const currentAttack = attackTestRef.current;
+          const currentAttackData = currentAttack ? getNormalAttackData(currentAttack.moveId as NormalAttackId) : null;
+          const jabCancel = currentAttack && requestedAttack?.startsWith('jab-')
+            && (currentAttack.moveId === 'jab-1' || currentAttack.moveId === 'jab-2')
+            && currentAttack.frameIndex + 1 >= (currentAttackData?.activeFrames.at(-1) ?? Infinity);
+          const mayInterrupt = !currentAttack || jabCancel
+            || currentAttack.frameIndex + 1 >= (currentAttackData?.firstActionableFrame ?? Infinity);
+          const remainingToActionable = currentAttack
+            ? getNormalAttackData(currentAttack.moveId as NormalAttackId).firstActionableFrame - (currentAttack.frameIndex + 1)
+            : 0;
+          if (requestedAttack && !mayInterrupt && remainingToActionable <= 9) bufferedAttackRef.current = { id: requestedAttack, expires: 9 };
+          const launchAttack = landingLagRef.current > 0 ? null : mayInterrupt ? (requestedAttack ?? bufferedAttackRef.current?.id ?? null) : null;
+          if (launchAttack) {
+            bufferedAttackRef.current = null;
+            if (launchAttack.startsWith('jab')) lastJabRef.current = launchAttack;
+            const isAerial = ['nair', 'fair', 'bair', 'uair', 'dair'].includes(launchAttack);
+            pendingDamageMultiplierRef.current *= isAerial && shortHopWindowRef.current > 0 ? 0.85 : 1;
+            void import('../data/falcon/trainingClips').then(({ resolveAnimationClip }) => {
+              const clip = resolveAnimationClip(launchAttack);
+              if (!clip) return;
+              collisionHistoryRef.current.clear();
+              attackTestRef.current = { clip, frameIndex: -1, moveId: clip.animationId, damageMultiplier: pendingDamageMultiplierRef.current };
+              pendingDamageMultiplierRef.current = 1;
+              setHitReadout(`${getNormalAttackData(launchAttack).label} · ${clip.source === 'default' ? 'DEFAULT SHAPES · NOT APPROVED' : clip.source === 'approved' ? 'APPROVED DATA' : 'DRAFT'} · target at 16 u`);
+              setJabTestActive(true);
+            });
+          }
           const playerInHitlag = playerHitlagFramesRef.current > 0;
           if (playerInHitlag) playerHitlagFramesRef.current -= 1;
-          else movementRef.current = stepTrainingMovement(
-              movementRef.current,
-              input,
-              controllerSettingsRef.current,
-            );
+          else if ((!attackTestRef.current || !movementRef.current.isGrounded) && landingLagRef.current === 0) {
+            const wasGrounded = movementRef.current.isGrounded;
+            movementRef.current = stepTrainingMovement(movementRef.current, input, controllerSettingsRef.current);
+            if (wasGrounded && !movementRef.current.isGrounded && movementRef.current.jumpInitialFramesRemaining === 0) shortHopWindowRef.current = 7;
+            if (shortHopWindowRef.current > 0) shortHopWindowRef.current -= 1;
+            if (!wasGrounded && movementRef.current.isGrounded && attackTestRef.current) {
+              const aerialData = getNormalAttackData(attackTestRef.current.moveId as NormalAttackId);
+              if (['nair', 'fair', 'bair', 'uair', 'dair'].includes(aerialData.id)) {
+                const autoCancelled = aerialData.autoCancelFrames.includes(attackTestRef.current.frameIndex + 1);
+                if (!autoCancelled) {
+                landingLagRef.current = aerialData.landingLag;
+                }
+                attackTestRef.current = null;
+                setJabTestActive(false);
+                setAttackFramePreview(null);
+              }
+            }
+          }
           dummyFrameRef.current += 1;
           setDummyFrame(dummyFrameRef.current);
           if (manualStepsRef.current > 0) {
@@ -291,9 +397,18 @@ const TrainingScreen: React.FC = () => {
           if (test && !playerInHitlag) {
             const nextFrame = test.frameIndex + 1;
             if (nextFrame >= test.clip.frames.length) {
-              attackTestRef.current = null;
-              setJabTestActive(false);
-              setAttackFramePreview(null);
+              if (test.moveId === 'rapid-jab' && input.actions.attack) {
+                test.frameIndex = -1;
+              } else if (test.moveId === 'rapid-jab') {
+                void import('../data/falcon/trainingClips').then(({ resolveAnimationClip }) => {
+                  const finisher = resolveAnimationClip('rapid-jab-finisher');
+                  if (finisher) attackTestRef.current = { clip: finisher, frameIndex: -1, moveId: finisher.animationId, damageMultiplier: 1 };
+                });
+              } else {
+                attackTestRef.current = null;
+                setJabTestActive(false);
+                setAttackFramePreview(null);
+              }
             } else {
               test.frameIndex = nextFrame;
               const frame = test.clip.frames[nextFrame];
@@ -302,7 +417,7 @@ const TrainingScreen: React.FC = () => {
                 id: 'player-1', moveId: test.moveId, frame: nextFrame + 1,
                 position: { x: Number(movementRef.current.positionX), y: Number(movementRef.current.positionY), z: 0 },
                 facing: movementRef.current.facingDirection, grounded: movementRef.current.isGrounded,
-                hitboxes: frame.hitboxes,
+                hitboxes: scaleAttackHitboxes(frame.hitboxes, test.damageMultiplier),
                 hurtboxes: frame.hurtboxes.length ? frame.hurtboxes : defaultTrainingHurtboxes(),
               };
               const phase = dummyFrameRef.current;
@@ -481,13 +596,14 @@ const TrainingScreen: React.FC = () => {
   const dummyPosition = dummyLaunchedRef.current
     ? { x: dummyRuntimeRef.current.positionX, y: dummyRuntimeRef.current.positionY }
     : behaviorPosition;
-  const startJabTest = () => {
+  const startJabTest = (attackId: NormalAttackId = selectedAttack) => {
     void import('../data/falcon/trainingClips').then(({ resolveAnimationClip }) => {
-      const clip = resolveAnimationClip('jab-1');
+      const clip = resolveAnimationClip(attackId);
       if (!clip) return;
       collisionHistoryRef.current.clear();
-      attackTestRef.current = { clip, frameIndex: -1, moveId: clip.animationId };
-      setHitReadout(`${clip.source === 'default' ? 'DEFAULT JAB SHAPES · NOT APPROVED' : clip.source === 'approved' ? 'APPROVED JAB DATA' : 'DRAFT JAB'} · target at 16 u`);
+      attackTestRef.current = { clip, frameIndex: -1, moveId: clip.animationId, damageMultiplier: 1 };
+      const data = getNormalAttackData(attackId);
+      setHitReadout(`${data.label} · ${clip.source === 'default' ? 'DEFAULT SHAPES · NOT APPROVED' : clip.source === 'approved' ? 'APPROVED DATA' : 'DRAFT'} · target at 16 u`);
       setJabTestActive(true);
     });
   };
@@ -527,7 +643,16 @@ const TrainingScreen: React.FC = () => {
             >
               Camera follow: {cameraFollowEnabled ? 'ON' : 'OFF'}
             </button>
-            <button className="training-settings-button" type="button" onClick={startJabTest} disabled={jabTestActive}>Test Jab → Target</button>
+            <div className="normal-attack-controls">
+              <label className="training-settings-button">Normal move
+                <select value={selectedAttack} onChange={(event) => setSelectedAttack(event.target.value as NormalAttackId)}>
+                  {NORMAL_ATTACK_IDS.map((id) => <option key={id} value={id}>{getNormalAttackData(id).label}</option>)}
+                </select>
+              </label>
+              <button className="training-settings-button" type="button" onClick={() => startJabTest()} disabled={jabTestActive}>Test move → Target</button>
+              <small>{(() => { const data = getNormalAttackData(selectedAttack); return <>{data.activeFrames.length ? `Active ${data.activeFrames[0]}–${data.activeFrames[data.activeFrames.length - 1]}f` : 'No active frame data'} · actionable {data.firstActionableFrame}f{data.landingLag ? ` · landing lag ${data.landingLag}f` : ''}{data.autoCancelFrames.length ? ` · autocancel ${data.autoCancelFrames[0]}–${data.autoCancelFrames.at(-1)}f` : ''} · <a href={data.wikiUrl} target="_blank" rel="noreferrer">SmashWiki source ↗</a></>; })()}</small>
+              <small>Attack button starts ground/air normals; mapped tilt/smash buttons and left-stick flicks select variants. The right stick follows Controller settings.</small>
+            </div>
             <div className="training-hit-readout" role="status" aria-live="polite">{hitReadout}</div>
             <div className="dummy-controls" aria-label="Training dummy">
               <label>Dummy % <input type="number" min="0" max="999" value={dummyPercent.toFixed(1)} onChange={(event) => {

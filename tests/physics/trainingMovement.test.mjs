@@ -922,7 +922,7 @@ test('controller options persist and older saved players receive safe defaults',
   assert.equal(storage.has(APP_STATE_STORAGE_KEY), true);
   assert.deepEqual(
     loadAppState(memoryStorage, fallback).players[0].controllerSettings,
-    { rumbleEnabled: true, abSmashEnabled: false, stickJumpEnabled: false, stickSensitivity: 'high' },
+    { rumbleEnabled: true, abSmashEnabled: false, stickJumpEnabled: false, stickSensitivity: 'high', rightStickMode: 'smash' },
   );
 
   const { controllerSettings: _oldSetting, ...legacyPlayer } = defaultPlayer;

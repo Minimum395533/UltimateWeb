@@ -22,6 +22,11 @@ export interface GamepadSnapshot {
 export interface TrainingControlInput {
   /** Signed horizontal input in [-1, 1]; analog magnitude is retained. */
   horizontal: number;
+  /** Left-stick vertical value, positive up. */
+  vertical: number;
+  /** Right-stick axes, positive right/up. */
+  rightStickX: number;
+  rightStickY: number;
   /** True for keyboard, D-pad, or button movement; these are always full strength. */
   isDigital: boolean;
   /** Hold down while airborne to reach the character's fast-fall speed. */
@@ -197,6 +202,9 @@ export function readTrainingControlInput(
     || gamepadDownHeld
     || buttonPressed(gamepad, 13);
   const stickJumpAction = shouldTriggerStickJump(gamepad?.axes[1] ?? 0, settings);
+  const vertical = applyAnalogDeadzone(-(gamepad?.axes[1] ?? 0));
+  const rightStickX = applyAnalogDeadzone(gamepad?.axes[2] ?? 0);
+  const rightStickY = applyAnalogDeadzone(-(gamepad?.axes[3] ?? 0));
   const jumpPressed = Boolean(
     (jumpKeyboardBinding.keyCode && newlyPressedKeys.has(jumpKeyboardBinding.keyCode))
     || (jumpAltKeyboardBinding.keyCode && newlyPressedKeys.has(jumpAltKeyboardBinding.keyCode)),
@@ -224,6 +232,9 @@ export function readTrainingControlInput(
 
   return {
     horizontal,
+    vertical,
+    rightStickX,
+    rightStickY,
     isDigital,
     downHeld,
     jumpPressed,

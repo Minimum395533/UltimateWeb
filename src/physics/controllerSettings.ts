@@ -7,6 +7,7 @@ export const DEFAULT_CONTROLLER_SETTINGS: PlayerControllerSettings = {
   abSmashEnabled: false,
   stickJumpEnabled: true,
   stickSensitivity: 'normal',
+  rightStickMode: 'smash',
 };
 
 export const STICK_JUMP_THRESHOLD = 0.65;
@@ -27,6 +28,7 @@ export function normalizeControllerSettings(value: unknown): PlayerControllerSet
     abSmashEnabled: typeof settings.abSmashEnabled === 'boolean' ? settings.abSmashEnabled : false,
     stickJumpEnabled: typeof settings.stickJumpEnabled === 'boolean' ? settings.stickJumpEnabled : true,
     stickSensitivity,
+    rightStickMode: settings.rightStickMode === 'tilt' ? 'tilt' : 'smash',
   };
 }
 
