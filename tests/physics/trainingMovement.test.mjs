@@ -19,6 +19,8 @@ import {
   stepTrainingMovement,
 } from '../../src/physics/trainingMovement.ts';
 import { unitsPerFrame, worldUnits } from '../../src/physics/units.ts';
+import { capsulesOverlap, defaultTrainingHurtboxes, resolveHitboxCollisions } from '../../src/physics/hitboxCollision.ts';
+import { resolveAnimationClip } from '../../src/data/falcon/trainingClips.ts';
 import {
   applyAnalogDeadzone,
   readTrainingControlInput,
@@ -31,6 +33,80 @@ import {
 import {
   DEFAULT_KEYBINDS_KEYBOARD_P1,
 } from '../../src/types/index.ts';
+
+const testCapsule = (id, x, state = 'normal') => ({
+  id, start: { x, y: 0, z: 0 }, end: { x, y: 4, z: 0 }, radius: 2, state,
+});
+const testHitbox = (id, x = 0, overrides = {}) => ({
+  id: `hb-${id}`, hitboxId: id, start: { x, y: 0, z: 0 }, end: { x, y: 4, z: 0 },
+  radius: 2, hitsGrounded: true, hitsAerial: true, clang: true, rehitRate: 0, ...overrides,
+});
+const combatant = (id, frame, { hitboxes = [], hurtboxes = [], x = 0, grounded = true, moveId = 'jab' } = {}) => ({
+  id, moveId, frame, position: { x, y: 0, z: 0 }, facing: 1, grounded, hitboxes, hurtboxes,
+});
+
+test('3D capsule overlap includes radii and depth separation', () => {
+  const actor = { position: { x: 0, y: 0, z: 0 }, facing: 1 };
+  assert.equal(capsulesOverlap(testCapsule('a', 0), actor, testCapsule('b', 3), actor), true);
+  assert.equal(capsulesOverlap(testCapsule('a', 0), actor, { ...testCapsule('b', 0), start: { x: 0, y: 0, z: 5 }, end: { x: 0, y: 4, z: 5 } }, actor), false);
+});
+
+test('hitboxes only collide on active frames and choose the lowest hitbox ID', () => {
+  const target = combatant('target', 1, { hurtboxes: [testCapsule('body', 4)] });
+  const attacker = combatant('p1', 1, { hitboxes: [testHitbox(4), testHitbox(1)] });
+  const history = new Map();
+  assert.equal(resolveHitboxCollisions([combatant('p1', 1), target], history).hits.length, 0);
+  const hit = resolveHitboxCollisions([attacker, target], history).hits[0];
+  assert.equal(hit.hitboxId, 1);
+});
+
+test('one-hit-per-move lockout and configured rehit intervals are honored', () => {
+  const history = new Map();
+  const target = combatant('target', 1, { hurtboxes: [testCapsule('body', 4)] });
+  const attack = (frame, rate = 0) => combatant('p1', frame, { hitboxes: [testHitbox(1, 0, { rehitRate: rate })] });
+  assert.equal(resolveHitboxCollisions([attack(1), target], history).hits.length, 1);
+  assert.equal(resolveHitboxCollisions([attack(2), target], history).hits.length, 0);
+  history.clear();
+  assert.equal(resolveHitboxCollisions([attack(1, 3), target], history).hits.length, 1);
+  assert.equal(resolveHitboxCollisions([attack(3, 3), target], history).hits.length, 0);
+  assert.equal(resolveHitboxCollisions([attack(4, 3), target], history).hits.length, 1);
+});
+
+test('intangible hurts are ignored and invincible contacts are reported without effect', () => {
+  const history = new Map();
+  const attack = combatant('p1', 1, { hitboxes: [testHitbox(2)] });
+  assert.equal(resolveHitboxCollisions([attack, combatant('target', 1, { hurtboxes: [testCapsule('body', 4, 'intangible')] })], history).hits.length, 0);
+  const hit = resolveHitboxCollisions([attack, combatant('target', 1, { hurtboxes: [testCapsule('body', 4, 'invincible')] })], history).hits[0];
+  assert.equal(hit.effect, 'invincible');
+});
+
+test('ground and air targeting filters, and clank versus trade outcomes, are reported', () => {
+  const groundedTarget = combatant('grounded', 1, { hurtboxes: [testCapsule('body', 4)] });
+  const aerialOnly = combatant('p1', 1, { hitboxes: [testHitbox(1, 0, { hitsGrounded: false })] });
+  assert.equal(resolveHitboxCollisions([aerialOnly, groundedTarget], new Map()).hits.length, 0);
+  const a = combatant('a', 1, { hitboxes: [testHitbox(1)] });
+  const b = combatant('b', 1, { x: 0, hitboxes: [testHitbox(2)] });
+  assert.ok(resolveHitboxCollisions([a, b], new Map()).clashes.some((clash) => clash.outcome === 'clank'));
+  b.hitboxes = [testHitbox(2, 0, { clang: false })];
+  assert.ok(resolveHitboxCollisions([a, b], new Map()).clashes.some((clash) => clash.outcome === 'trade'));
+});
+
+test('default hurtbox fallback gives the target and fighter labeled body capsules', () => {
+  const fallback = defaultTrainingHurtboxes();
+  assert.deepEqual(fallback.map((box) => box.part), ['head', 'torso', 'legs']);
+});
+
+test('seeded jab animation hits the stationary training target only on its active frame', () => {
+  const jab = resolveAnimationClip('jab-1');
+  const target = combatant('training-target', 1, { x: 16, hurtboxes: defaultTrainingHurtboxes() });
+  const attackerAtFrame = (frame) => combatant('player-1', frame, {
+    moveId: 'jab-test',
+    hitboxes: jab.frames[frame - 1].hitboxes,
+    hurtboxes: jab.frames[frame - 1].hurtboxes,
+  });
+  assert.equal(resolveHitboxCollisions([attackerAtFrame(2), target], new Map()).hits.length, 0);
+  assert.equal(resolveHitboxCollisions([attackerAtFrame(3), target], new Map()).hits.length, 1);
+});
 
 function analog(
   horizontal,

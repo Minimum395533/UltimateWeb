@@ -4,6 +4,7 @@ import { useGameState } from '../hooks/useGameState';
 import { DEFAULT_KEYBINDS_KEYBOARD_P1 } from '../types';
 import type { PlayerButtonSettings, PlayerKeybinds } from '../types';
 import type { AnimationDraft } from '../types/frameData';
+import type { AnimationFrame } from '../types/frameData';
 import { normalizeControllerSettings } from '../physics/controllerSettings';
 import {
   CAPTAIN_FALCON_MOVEMENT,
@@ -26,6 +27,9 @@ import {
 } from '../dev/animationPreview';
 import type { AnimationClipSource, MovementAnimationPreviewFrame } from '../dev/animationPreview';
 import type { TrainingClips } from '../data/falcon/trainingClips';
+import { defaultTrainingHurtboxes, resolveHitboxCollisions } from '../physics/hitboxCollision';
+import type { CollisionHistory, CombatantFrame } from '../physics/hitboxCollision';
+import type { AnimationClip } from '../dev/animationPreview';
 import '../styles/TrainingScreen.css';
 
 const TrainingScreen: React.FC = () => {
@@ -45,10 +49,17 @@ const TrainingScreen: React.FC = () => {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [animationPreview, setAnimationPreview] =
     useState<MovementAnimationPreviewFrame | null>(null);
+  const [showCollisionShapes, setShowCollisionShapes] = useState(false);
+  const [hitReadout, setHitReadout] = useState('No hits registered');
+  const [jabTestActive, setJabTestActive] = useState(false);
+  const [attackFramePreview, setAttackFramePreview] = useState<AnimationFrame | null>(null);
   const movementRef = useRef<TrainingMovementState>(createInitialTrainingMovementState());
   const clipsRef = useRef<TrainingClips>({});
   const previewPlaybackRef = useRef(INITIAL_MOVEMENT_ANIMATION_PREVIEW);
   const activeAnimationRef = useRef<MovementAnimationPreviewFrame | null>(null);
+  const attackTestRef = useRef<{ clip: AnimationClip; frameIndex: number; moveId: string } | null>(null);
+  const collisionHistoryRef = useRef(new Map<string, CollisionHistory>());
+  const attackSequenceRef = useRef(0);
   const forceIdleVarianceRef = useRef(false);
   const pressedKeys = useRef(new Set<string>());
   const newlyPressedKeys = useRef(new Set<string>());
@@ -199,6 +210,36 @@ const TrainingScreen: React.FC = () => {
           );
           previewPlaybackRef.current = previewStep.playback;
           activeAnimationRef.current = previewStep.animation;
+          const test = attackTestRef.current;
+          if (test) {
+            const nextFrame = test.frameIndex + 1;
+            if (nextFrame >= test.clip.frames.length) {
+              attackTestRef.current = null;
+              setJabTestActive(false);
+              setAttackFramePreview(null);
+            } else {
+              test.frameIndex = nextFrame;
+              const frame = test.clip.frames[nextFrame];
+              setAttackFramePreview(frame);
+              const attacker: CombatantFrame = {
+                id: 'player-1', moveId: test.moveId, frame: nextFrame + 1,
+                position: { x: Number(movementRef.current.positionX), y: Number(movementRef.current.positionY), z: 0 },
+                facing: movementRef.current.facingDirection, grounded: movementRef.current.isGrounded,
+                hitboxes: frame.hitboxes,
+                hurtboxes: frame.hurtboxes.length ? frame.hurtboxes : defaultTrainingHurtboxes(),
+              };
+              const target: CombatantFrame = {
+                id: 'training-target', moveId: 'stationary', frame: nextFrame + 1,
+                position: { x: 16, y: 0, z: 0 }, facing: -1, grounded: true,
+                hitboxes: [], hurtboxes: defaultTrainingHurtboxes(),
+              };
+              const collision = resolveHitboxCollisions([attacker, target], collisionHistoryRef.current);
+              const hit = collision.hits[0];
+              if (hit) setHitReadout(hit.effect === 'hit'
+                ? `Hit registered · hitbox ${hit.hitboxId} · frame ${nextFrame + 1}`
+                : `Contact · target invincible · hitbox ${hit.hitboxId}`);
+            }
+          }
           forceIdleVarianceRef.current = false;
           newlyPressedKeys.current.clear();
           accumulatedMilliseconds -= TRAINING_STEP_MILLISECONDS;
@@ -283,7 +324,8 @@ const TrainingScreen: React.FC = () => {
     0,
     1 + CAPTAIN_FALCON_MOVEMENT.maxAirJumps - movement.jumpsUsed,
   );
-  const draftSilhouette = animationPreview?.frame.silhouette;
+  const visibleAnimationFrame = attackFramePreview ?? animationPreview?.frame;
+  const draftSilhouette = visibleAnimationFrame?.silhouette;
   const silhouettePoints = draftSilhouette?.points
     .map(({ x, y }) => `${x},${-y}`)
     .join(' ') ?? '';
@@ -291,7 +333,9 @@ const TrainingScreen: React.FC = () => {
     draftSilhouette && draftSilhouette.points.length >= 2,
   );
   const idleVarianceDraftAvailable = Boolean(clips['idle-variance']?.frames.length);
-  const clipSource: AnimationClipSource | null = animationPreview?.clip.source ?? null;
+  const clipSource: AnimationClipSource | null = jabTestActive
+    ? attackTestRef.current?.clip.source ?? null
+    : animationPreview?.clip.source ?? null;
   const clipSourceLabel = clipSource === 'draft'
     ? 'WORKING DRAFT'
     : clipSource === 'approved'
@@ -299,6 +343,17 @@ const TrainingScreen: React.FC = () => {
       : clipSource === 'default'
         ? 'DEFAULT SHAPES · NOT APPROVED'
         : 'NO ANIMATION';
+  const startJabTest = () => {
+    void import('../data/falcon/trainingClips').then(({ resolveAnimationClip }) => {
+      const clip = resolveAnimationClip('jab-1');
+      if (!clip) return;
+      attackSequenceRef.current += 1;
+      collisionHistoryRef.current.clear();
+      attackTestRef.current = { clip, frameIndex: -1, moveId: `jab-test-${attackSequenceRef.current}` };
+      setHitReadout(`${clip.source === 'default' ? 'DEFAULT JAB SHAPES · NOT APPROVED' : clip.source === 'approved' ? 'APPROVED JAB DATA' : 'DRAFT JAB'} · target at 16 u`);
+      setJabTestActive(true);
+    });
+  };
 
   return (
     <main className="training-screen">
@@ -335,6 +390,8 @@ const TrainingScreen: React.FC = () => {
             >
               Camera follow: {cameraFollowEnabled ? 'ON' : 'OFF'}
             </button>
+            <button className="training-settings-button" type="button" onClick={startJabTest} disabled={jabTestActive}>Test Jab → Target</button>
+            <div className="training-hit-readout" role="status" aria-live="polite">{hitReadout}</div>
           </div>
         </div>
 
@@ -385,6 +442,8 @@ const TrainingScreen: React.FC = () => {
 
         <div className="stage-view-controls">
           <span className="stage-view-caption">STAGE VIEW</span>
+          <label className="collision-toggle"><input type="checkbox" checked={showCollisionShapes} onChange={(event) => setShowCollisionShapes(event.target.checked)} /> Hitbox display</label>
+          {showCollisionShapes && <span className="collision-legend"><i>Hit</i> · <b>Hurt</b> · <em>Grab</em> · <strong>Intangible</strong> · <u>Invincible</u></span>}
           <div className="stage-zoom-toggle" role="group" aria-label="Stage map zoom">
             <button
               type="button"
@@ -447,6 +506,22 @@ const TrainingScreen: React.FC = () => {
               }}
               aria-hidden="true"
             />
+            <div className="training-target-marker" style={{ left: `${worldToMapX(16)}%`, top: `${worldToMapY(0)}%` }} aria-label="Stationary training target">TARGET</div>
+            {showCollisionShapes && (() => {
+              const frame = attackFramePreview ?? animationPreview?.frame;
+              const fighterPosition = { x: Number(movement.positionX), y: Number(movement.positionY), z: 0 };
+              const fighterFacing = movement.facingDirection;
+              const hurtboxes = frame?.hurtboxes.length ? frame.hurtboxes : defaultTrainingHurtboxes();
+              const capsules = [
+                ...hurtboxes.map((box) => ({ box, position: fighterPosition, facing: fighterFacing, color: box.state === 'intangible' ? '#bd74ff' : box.state === 'invincible' ? '#ffd54a' : '#38e08c' })),
+                ...defaultTrainingHurtboxes().map((box) => ({ box, position: { x: 16, y: 0, z: 0 }, facing: -1 as const, color: '#38e08c' })),
+                ...(frame?.hitboxes ?? []).map((box) => ({ box, position: fighterPosition, facing: fighterFacing, color: '#ff4655' })),
+                ...(frame?.grabboxes ?? []).map((box) => ({ box, position: fighterPosition, facing: fighterFacing, color: '#55c8ff' })),
+              ];
+              return <svg className="training-collision-overlay" viewBox="-240 -179 480 319" preserveAspectRatio="none" aria-label="Hitboxes red, grab boxes blue, hurtboxes green, intangible purple, invincible yellow">
+                {capsules.map(({ box, position, facing, color }, index) => <line key={`${box.id}-${index}`} x1={position.x + box.start.x * facing} y1={-(position.y + box.start.y)} x2={position.x + box.end.x * facing} y2={-(position.y + box.end.y)} stroke={color} strokeWidth={box.radius * 2} strokeLinecap="round" opacity="0.72" />)}
+              </svg>;
+            })()}
             <span
               className="stage-platform-label"
               style={{

@@ -149,6 +149,59 @@
   will-change: transform;
 }
 
+.training-target-marker {
+  position: absolute;
+  z-index: 6;
+  padding: 3px 5px;
+  transform: translate(-50%, -100%);
+  border: 1px solid #f4ae55;
+  border-radius: 4px;
+  background: #422f23;
+  color: #ffe0a8;
+  font: 800 8px var(--font-title);
+  letter-spacing: .08em;
+}
+
+.training-collision-overlay {
+  position: absolute;
+  z-index: 7;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.collision-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #b9c7d7;
+  font: 700 .68rem var(--font-title);
+}
+
+.stage-view-controls { flex-wrap: wrap; }
+.collision-legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  color: #bdcad9;
+  font-size: .62rem;
+}
+.collision-legend i { color: #ff4655; font-style: normal; }
+.collision-legend b { color: #38e08c; }
+.collision-legend em { color: #55c8ff; font-style: normal; }
+.collision-legend strong { color: #bd74ff; }
+.collision-legend u { color: #ffd54a; text-decoration: none; }
+
+.training-hit-readout {
+  margin-top: 7px;
+  color: #42d8ee;
+  font-size: .7rem;
+  letter-spacing: 0;
+  text-align: right;
+}
+
 .stage-grid {
   position: absolute;
   inset: 0;
