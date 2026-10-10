@@ -30,6 +30,10 @@ import type { TrainingClips } from '../data/falcon/trainingClips';
 import { defaultTrainingHurtboxes, resolveHitboxCollisions } from '../physics/hitboxCollision';
 import type { CollisionHistory, CombatantFrame } from '../physics/hitboxCollision';
 import type { AnimationClip } from '../dev/animationPreview';
+import { applyDirectionalInfluence, applyReaction, calculateHitReaction, CAPTAIN_FALCON_WEIGHT, staleQueueAfterMove, stepLaunch } from '../physics/combat';
+import type { CombatantRuntime, HitReaction } from '../physics/combat';
+import { chooseGetup } from '../physics/combat';
+import type { RecoveryState } from '../physics/combat';
 import '../styles/TrainingScreen.css';
 
 const TrainingScreen: React.FC = () => {
@@ -53,13 +57,36 @@ const TrainingScreen: React.FC = () => {
   const [hitReadout, setHitReadout] = useState('No hits registered');
   const [jabTestActive, setJabTestActive] = useState(false);
   const [attackFramePreview, setAttackFramePreview] = useState<AnimationFrame | null>(null);
+  const [dummyPercent, setDummyPercent] = useState(0);
+  const [comboCount, setComboCount] = useState(0);
+  const [lastReaction, setLastReaction] = useState<HitReaction | null>(null);
+  const [dummyBehavior, setDummyBehavior] = useState<'stand' | 'jump' | 'move'>('stand');
+  const [dummyFrame, setDummyFrame] = useState(0);
+  const [simSpeed, setSimSpeed] = useState(1);
+  const [dummyRecovery, setDummyRecovery] = useState<RecoveryState>('airborne');
+  const [getupOption, setGetupOption] = useState<'neutral' | 'roll-left' | 'roll-right' | 'attack'>('neutral');
+  const dummyPercentRef = useRef(0);
+  const dummyBehaviorRef = useRef<'stand' | 'jump' | 'move'>('stand');
+  const dummyFrameRef = useRef(0);
+  const simSpeedRef = useRef(1);
+  const manualStepsRef = useRef(0);
+  const dummyLaunchedRef = useRef(false);
+  const dummyInvincibleFramesRef = useRef(0);
+  const dummyRespawnFramesRef = useRef(0);
+  const dummyTechWindowRef = useRef(0);
+  const playerHitlagFramesRef = useRef(0);
+  const lastReactionRef = useRef<HitReaction | null>(null);
+  const dummyRuntimeRef = useRef<CombatantRuntime>({
+    percent: 0, positionX: 16, positionY: 0, velocityX: 0, velocityY: 0,
+    hitlagFrames: 0, hitstunFrames: 0, ko: false,
+  });
+  const staleQueueRef = useRef<string[]>([]);
   const movementRef = useRef<TrainingMovementState>(createInitialTrainingMovementState());
   const clipsRef = useRef<TrainingClips>({});
   const previewPlaybackRef = useRef(INITIAL_MOVEMENT_ANIMATION_PREVIEW);
   const activeAnimationRef = useRef<MovementAnimationPreviewFrame | null>(null);
   const attackTestRef = useRef<{ clip: AnimationClip; frameIndex: number; moveId: string } | null>(null);
   const collisionHistoryRef = useRef(new Map<string, CollisionHistory>());
-  const attackSequenceRef = useRef(0);
   const forceIdleVarianceRef = useRef(false);
   const pressedKeys = useRef(new Set<string>());
   const newlyPressedKeys = useRef(new Set<string>());
@@ -175,11 +202,11 @@ const TrainingScreen: React.FC = () => {
 
     const animate = (timestamp: number) => {
       if (previousTimestamp !== null) {
-        accumulatedMilliseconds += Math.min(timestamp - previousTimestamp, 100);
+        accumulatedMilliseconds += Math.min(timestamp - previousTimestamp, 100) * simSpeedRef.current;
         let steps = 0;
 
         while (
-          accumulatedMilliseconds >= TRAINING_STEP_MILLISECONDS
+          (accumulatedMilliseconds >= TRAINING_STEP_MILLISECONDS || manualStepsRef.current > 0)
           && steps < 6
         ) {
           const gamepads: GamepadSnapshot[] = typeof navigator.getGamepads === 'function'
@@ -196,22 +223,72 @@ const TrainingScreen: React.FC = () => {
             buttonSettingsRef.current,
             controllerTypeRef.current,
           );
-          movementRef.current = stepTrainingMovement(
-            movementRef.current,
-            input,
-            controllerSettingsRef.current,
-          );
-          const previewStep = stepMovementAnimationPreview(
-            previewPlaybackRef.current,
-            movementRef.current,
-            clipsRef.current,
-            Math.random,
-            forceIdleVarianceRef.current,
-          );
-          previewPlaybackRef.current = previewStep.playback;
-          activeAnimationRef.current = previewStep.animation;
+          const playerInHitlag = playerHitlagFramesRef.current > 0;
+          if (playerInHitlag) playerHitlagFramesRef.current -= 1;
+          else movementRef.current = stepTrainingMovement(
+              movementRef.current,
+              input,
+              controllerSettingsRef.current,
+            );
+          dummyFrameRef.current += 1;
+          setDummyFrame(dummyFrameRef.current);
+          if (manualStepsRef.current > 0) {
+            manualStepsRef.current -= 1;
+            if (accumulatedMilliseconds >= TRAINING_STEP_MILLISECONDS) accumulatedMilliseconds -= TRAINING_STEP_MILLISECONDS;
+          } else accumulatedMilliseconds -= TRAINING_STEP_MILLISECONDS;
+          if (dummyLaunchedRef.current && !dummyRuntimeRef.current.ko) {
+            if (dummyRuntimeRef.current.hitlagFrames > 0) {
+              const sdi = applyDirectionalInfluence(0, {
+                sdiX: input.horizontal,
+                sdiY: input.downHeld ? -1 : input.stickJumpAction ? 1 : 0,
+              }).sdi;
+              dummyRuntimeRef.current.positionX += sdi.x;
+              dummyRuntimeRef.current.positionY += sdi.y;
+            }
+            const previousY = dummyRuntimeRef.current.positionY;
+            const nextRuntime = stepLaunch(dummyRuntimeRef.current);
+            if (previousY >= 0 && nextRuntime.positionY <= 0 && nextRuntime.velocityY < 0) {
+              dummyRuntimeRef.current = { ...nextRuntime, positionY: 0, velocityX: 0, velocityY: 0 };
+              dummyLaunchedRef.current = false;
+              if (lastReactionRef.current?.tumble) {
+                dummyTechWindowRef.current = 11;
+                setDummyRecovery('knockdown');
+              }
+              else setDummyRecovery('airborne');
+            } else dummyRuntimeRef.current = nextRuntime;
+          } else if (dummyRuntimeRef.current.ko) {
+            dummyRespawnFramesRef.current += 1;
+            if (dummyRespawnFramesRef.current >= 90) {
+              dummyRuntimeRef.current = { ...dummyRuntimeRef.current, positionX: 16, positionY: 0, velocityX: 0, velocityY: 0, hitlagFrames: 0, hitstunFrames: 0, ko: false };
+              dummyLaunchedRef.current = false;
+              dummyRespawnFramesRef.current = 0;
+              dummyInvincibleFramesRef.current = 60;
+              setDummyRecovery('airborne');
+            }
+          }
+          if (dummyTechWindowRef.current > 0) {
+            if (input.actions.shield) {
+              dummyTechWindowRef.current = 0;
+              setDummyRecovery('ground-tech');
+            } else {
+              dummyTechWindowRef.current -= 1;
+              if (dummyTechWindowRef.current === 0) setDummyRecovery('missed-tech');
+            }
+          }
+          if (dummyInvincibleFramesRef.current > 0) dummyInvincibleFramesRef.current -= 1;
+          if (!playerInHitlag) {
+            const previewStep = stepMovementAnimationPreview(
+              previewPlaybackRef.current,
+              movementRef.current,
+              clipsRef.current,
+              Math.random,
+              forceIdleVarianceRef.current,
+            );
+            previewPlaybackRef.current = previewStep.playback;
+            activeAnimationRef.current = previewStep.animation;
+          }
           const test = attackTestRef.current;
-          if (test) {
+          if (test && !playerInHitlag) {
             const nextFrame = test.frameIndex + 1;
             if (nextFrame >= test.clip.frames.length) {
               attackTestRef.current = null;
@@ -228,21 +305,55 @@ const TrainingScreen: React.FC = () => {
                 hitboxes: frame.hitboxes,
                 hurtboxes: frame.hurtboxes.length ? frame.hurtboxes : defaultTrainingHurtboxes(),
               };
+              const phase = dummyFrameRef.current;
+              const behaviorPosition = dummyBehaviorRef.current === 'jump'
+                ? { x: 16, y: Math.max(0, Math.sin(phase * Math.PI / 45) * 18), z: 0 }
+                : dummyBehaviorRef.current === 'move'
+                  ? { x: 16 + Math.sin(phase * Math.PI / 60) * 12, y: 0, z: 0 }
+                  : { x: 16, y: 0, z: 0 };
+              const targetPosition = dummyLaunchedRef.current
+                ? { x: dummyRuntimeRef.current.positionX, y: dummyRuntimeRef.current.positionY, z: 0 }
+                : behaviorPosition;
               const target: CombatantFrame = {
                 id: 'training-target', moveId: 'stationary', frame: nextFrame + 1,
-                position: { x: 16, y: 0, z: 0 }, facing: -1, grounded: true,
-                hitboxes: [], hurtboxes: defaultTrainingHurtboxes(),
+                position: targetPosition, facing: -1, grounded: targetPosition.y === 0,
+                hitboxes: [], hurtboxes: defaultTrainingHurtboxes().map((box) => ({
+                  ...box, state: dummyInvincibleFramesRef.current > 0 ? 'invincible' : box.state,
+                })),
               };
               const collision = resolveHitboxCollisions([attacker, target], collisionHistoryRef.current);
               const hit = collision.hits[0];
-              if (hit) setHitReadout(hit.effect === 'hit'
-                ? `Hit registered · hitbox ${hit.hitboxId} · frame ${nextFrame + 1}`
-                : `Contact · target invincible · hitbox ${hit.hitboxId}`);
+              if (hit) {
+                if (hit.effect === 'hit') {
+                  const reaction = calculateHitReaction(hit.hitbox, {
+                    percent: dummyPercentRef.current,
+                    weight: CAPTAIN_FALCON_WEIGHT,
+                    staleQueue: staleQueueRef.current,
+                    crouching: false,
+                    grounded: targetPosition.y === 0,
+                  }, hit.moveId);
+                  dummyPercentRef.current += reaction.damage;
+                  staleQueueRef.current = staleQueueAfterMove(staleQueueRef.current, hit.moveId);
+                  dummyRuntimeRef.current = applyReaction({
+                    ...dummyRuntimeRef.current, percent: dummyPercentRef.current,
+                  }, reaction, movementRef.current.facingDirection, {
+                    diX: input.horizontal,
+                    diY: input.downHeld ? -1 : input.stickJumpAction ? 1 : 0,
+                    lsi: input.downHeld ? -1 : input.stickJumpAction ? 1 : 0,
+                  });
+                  playerHitlagFramesRef.current = reaction.hitlagFrames;
+                  dummyLaunchedRef.current = true;
+                  setDummyPercent(dummyPercentRef.current);
+                  setComboCount((count) => count + 1);
+                  setLastReaction(reaction);
+                  lastReactionRef.current = reaction;
+                  setHitReadout(`Hit · ${reaction.damage.toFixed(1)}% · ${reaction.knockback.toFixed(0)} KB · ${reaction.hitstunFrames}f stun`);
+                } else setHitReadout(`Contact · target invincible · hitbox ${hit.hitboxId}`);
+              }
             }
           }
           forceIdleVarianceRef.current = false;
           newlyPressedKeys.current.clear();
-          accumulatedMilliseconds -= TRAINING_STEP_MILLISECONDS;
           steps += 1;
         }
 
@@ -343,13 +454,39 @@ const TrainingScreen: React.FC = () => {
       : clipSource === 'default'
         ? 'DEFAULT SHAPES · NOT APPROVED'
         : 'NO ANIMATION';
+  const trajectoryPoints = lastReaction ? (() => {
+    const angle = lastReaction.launchAngle * Math.PI / 180;
+    let x = 16;
+    let y = 0;
+    let vx = Math.cos(angle) * lastReaction.launchSpeed;
+    let vy = Math.sin(angle) * lastReaction.launchSpeed;
+    const points = [`${x},${-y}`];
+    for (let frame = 0; frame < 80; frame += 1) {
+      const speed = Math.hypot(vx, vy);
+      const decay = speed <= 0.051 ? 0 : (speed - 0.051) / speed;
+      vx *= decay;
+      vy = vy * decay - 0.12;
+      x += vx;
+      y += vy;
+      points.push(`${x},${-y}`);
+      if (x < -240 || x > 240 || y < -140 || y > 179) break;
+    }
+    return points.join(' ');
+  })() : null;
+  const behaviorPosition = dummyBehavior === 'jump'
+    ? { x: 16, y: Math.max(0, Math.sin(dummyFrame * Math.PI / 45) * 18) }
+    : dummyBehavior === 'move'
+      ? { x: 16 + Math.sin(dummyFrame * Math.PI / 60) * 12, y: 0 }
+      : { x: 16, y: 0 };
+  const dummyPosition = dummyLaunchedRef.current
+    ? { x: dummyRuntimeRef.current.positionX, y: dummyRuntimeRef.current.positionY }
+    : behaviorPosition;
   const startJabTest = () => {
     void import('../data/falcon/trainingClips').then(({ resolveAnimationClip }) => {
       const clip = resolveAnimationClip('jab-1');
       if (!clip) return;
-      attackSequenceRef.current += 1;
       collisionHistoryRef.current.clear();
-      attackTestRef.current = { clip, frameIndex: -1, moveId: `jab-test-${attackSequenceRef.current}` };
+      attackTestRef.current = { clip, frameIndex: -1, moveId: clip.animationId };
       setHitReadout(`${clip.source === 'default' ? 'DEFAULT JAB SHAPES · NOT APPROVED' : clip.source === 'approved' ? 'APPROVED JAB DATA' : 'DRAFT JAB'} · target at 16 u`);
       setJabTestActive(true);
     });
@@ -392,6 +529,44 @@ const TrainingScreen: React.FC = () => {
             </button>
             <button className="training-settings-button" type="button" onClick={startJabTest} disabled={jabTestActive}>Test Jab → Target</button>
             <div className="training-hit-readout" role="status" aria-live="polite">{hitReadout}</div>
+            <div className="dummy-controls" aria-label="Training dummy">
+              <label>Dummy % <input type="number" min="0" max="999" value={dummyPercent.toFixed(1)} onChange={(event) => {
+                const value = Math.max(0, Math.min(999, Number(event.target.value) || 0));
+                dummyPercentRef.current = value;
+                setDummyPercent(value);
+              }} /></label>
+              <span>Combo {comboCount}</span>
+              <span>{dummyRuntimeRef.current.ko ? `KO · ${Math.max(0, 90 - dummyRespawnFramesRef.current)}f respawn` : dummyInvincibleFramesRef.current > 0 ? 'Respawn invincible' : 'Ready'}</span>
+              {(dummyRecovery === 'knockdown' || dummyRecovery === 'missed-tech' || dummyRecovery === 'ground-tech') && <label>Get up <select value={getupOption} onChange={(event) => setGetupOption(event.target.value as typeof getupOption)}><option value="neutral">Neutral</option><option value="roll-left">Roll left</option><option value="roll-right">Roll right</option><option value="attack">Attack</option></select></label>}
+              {(dummyRecovery === 'knockdown' || dummyRecovery === 'missed-tech' || dummyRecovery === 'ground-tech') && <button type="button" onClick={() => {
+                setDummyRecovery(chooseGetup(getupOption));
+                dummyRuntimeRef.current = { ...dummyRuntimeRef.current, positionX: 16, positionY: 0, velocityX: 0, velocityY: 0, hitlagFrames: 0, hitstunFrames: 0, ko: false };
+              }}>Recover</button>}
+              <label>Behavior <select value={dummyBehavior} onChange={(event) => {
+                const value = event.target.value as 'stand' | 'jump' | 'move';
+                dummyBehaviorRef.current = value;
+                setDummyBehavior(value);
+              }}><option value="stand">Stand</option><option value="jump">Jump</option><option value="move">Move</option></select></label>
+              <label>Speed <select value={simSpeed} onChange={(event) => {
+                const value = Number(event.target.value);
+                simSpeedRef.current = value;
+                setSimSpeed(value);
+              }}><option value={0}>Paused</option><option value={0.25}>¼×</option><option value={0.5}>½×</option><option value={1}>1×</option></select></label>
+              <button type="button" onClick={() => { manualStepsRef.current += 1; }}>Frame advance</button>
+              <button type="button" onClick={() => {
+                dummyPercentRef.current = 0;
+                dummyRuntimeRef.current = { percent: 0, positionX: 16, positionY: 0, velocityX: 0, velocityY: 0, hitlagFrames: 0, hitstunFrames: 0, ko: false };
+                dummyLaunchedRef.current = false;
+                dummyInvincibleFramesRef.current = 0;
+                staleQueueRef.current = [];
+                dummyRespawnFramesRef.current = 0;
+                dummyTechWindowRef.current = 0;
+                lastReactionRef.current = null;
+                setDummyRecovery('airborne');
+                setDummyPercent(0); setComboCount(0); setLastReaction(null); setHitReadout('Dummy reset');
+              }}>Reset dummy</button>
+            </div>
+            {lastReaction && <div className="reaction-readout">Launch {lastReaction.launchSpeed.toFixed(2)} u/frame · angle {lastReaction.launchAngle}° · hitlag {lastReaction.hitlagFrames}f{lastReaction.tumble ? ' · tumble' : ''}</div>}
           </div>
         </div>
 
@@ -506,7 +681,8 @@ const TrainingScreen: React.FC = () => {
               }}
               aria-hidden="true"
             />
-            <div className="training-target-marker" style={{ left: `${worldToMapX(16)}%`, top: `${worldToMapY(0)}%` }} aria-label="Stationary training target">TARGET</div>
+            {!dummyRuntimeRef.current.ko && <div className="training-target-marker" style={{ left: `${worldToMapX(dummyPosition.x)}%`, top: `${worldToMapY(dummyPosition.y)}%` }} aria-label={`Training target ${dummyPercent.toFixed(1)} percent`}>DUMMY · {dummyPercent.toFixed(1)}%</div>}
+            {trajectoryPoints && <svg className="training-trajectory-preview" viewBox="-240 -179 480 319" preserveAspectRatio="none" aria-label="Estimated launch trajectory"><polyline points={trajectoryPoints} /></svg>}
             {showCollisionShapes && (() => {
               const frame = attackFramePreview ?? animationPreview?.frame;
               const fighterPosition = { x: Number(movement.positionX), y: Number(movement.positionY), z: 0 };
@@ -514,7 +690,7 @@ const TrainingScreen: React.FC = () => {
               const hurtboxes = frame?.hurtboxes.length ? frame.hurtboxes : defaultTrainingHurtboxes();
               const capsules = [
                 ...hurtboxes.map((box) => ({ box, position: fighterPosition, facing: fighterFacing, color: box.state === 'intangible' ? '#bd74ff' : box.state === 'invincible' ? '#ffd54a' : '#38e08c' })),
-                ...defaultTrainingHurtboxes().map((box) => ({ box, position: { x: 16, y: 0, z: 0 }, facing: -1 as const, color: '#38e08c' })),
+                ...defaultTrainingHurtboxes().map((box) => ({ box, position: { ...dummyPosition, z: 0 }, facing: -1 as const, color: '#38e08c' })),
                 ...(frame?.hitboxes ?? []).map((box) => ({ box, position: fighterPosition, facing: fighterFacing, color: '#ff4655' })),
                 ...(frame?.grabboxes ?? []).map((box) => ({ box, position: fighterPosition, facing: fighterFacing, color: '#55c8ff' })),
               ];
@@ -629,7 +805,7 @@ const TrainingScreen: React.FC = () => {
           <p><strong>Captain Falcon:</strong> gravity {Number(CAPTAIN_FALCON_MOVEMENT.gravity).toFixed(2)} u/frame² · walk {Number(CAPTAIN_FALCON_MOVEMENT.walkSpeed).toFixed(3)} · initial dash {Number(CAPTAIN_FALCON_MOVEMENT.initialDashSpeed).toFixed(3)} · run {Number(CAPTAIN_FALCON_MOVEMENT.runSpeed).toFixed(3)} · fall {Number(CAPTAIN_FALCON_MOVEMENT.fallSpeed).toFixed(3)} · fast fall {Number(CAPTAIN_FALCON_MOVEMENT.fastFallSpeed).toFixed(3)} u/frame.</p>
           <p><strong>Jump heights:</strong> full hop {Number(CAPTAIN_FALCON_MOVEMENT.fullHopHeight)} u · first-four-frame height {Number(CAPTAIN_FALCON_MOVEMENT.jumpInitialHeight)} u · short hop {Number(CAPTAIN_FALCON_MOVEMENT.shortHopHeight)} u · one midair jump {Number(CAPTAIN_FALCON_MOVEMENT.airJumpHeight)} u.</p>
           <p><strong>Diagram-scaled bounds:</strong> blastzone x ±240, y −140 to +179 u · camera x ±180, y −60 to +130 u. These bounds are approximate and scaled from the supplied image.</p>
-          <p className="training-note">A jump off the platform keeps one midair jump available. Landing restores both jumps; attacks and other combat actions are not implemented.</p>
+          <p className="training-note">A jump off the platform keeps one midair jump available. The test jab applies damage and launch to the training dummy; controls remain a combat prototype.</p>
         </div>
       </section>
     </main>

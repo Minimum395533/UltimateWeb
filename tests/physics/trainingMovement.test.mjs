@@ -22,6 +22,11 @@ import { unitsPerFrame, worldUnits } from '../../src/physics/units.ts';
 import { capsulesOverlap, defaultTrainingHurtboxes, resolveHitboxCollisions } from '../../src/physics/hitboxCollision.ts';
 import { resolveAnimationClip } from '../../src/data/falcon/trainingClips.ts';
 import {
+  calculateHitReaction, applyDirectionalInfluence, applyReaction, stepLaunch,
+  staleDamageMultiplier, staleQueueAfterMove, canCancelHitstun, resolveLandingRecovery,
+  chooseGetup, CAPTAIN_FALCON_WEIGHT,
+} from '../../src/physics/combat.ts';
+import {
   applyAnalogDeadzone,
   readTrainingControlInput,
 } from '../../src/physics/trainingInput.ts';
@@ -106,6 +111,55 @@ test('seeded jab animation hits the stationary training target only on its activ
   });
   assert.equal(resolveHitboxCollisions([attackerAtFrame(2), target], new Map()).hits.length, 0);
   assert.equal(resolveHitboxCollisions([attackerAtFrame(3), target], new Map()).hits.length, 1);
+});
+
+test('Ultimate hit reaction uses percent, 1v1 damage, Falcon weight, and frame multipliers', () => {
+  const hitbox = {
+    damage: 10, angle: 45, baseKnockback: 30, knockbackGrowth: 100,
+    fixedKnockback: 0, setWeight: false, hitlagMultiplier: 1,
+    effect: 'Normal', flinchless: false,
+  };
+  const reaction = calculateHitReaction(hitbox, {
+    percent: 0, weight: CAPTAIN_FALCON_WEIGHT, staleQueue: [], crouching: false,
+  }, 'test-move');
+  assert.equal(reaction.damage, 12.6);
+  assert.ok(Math.abs(reaction.knockback - 81.91) < 0.02);
+  assert.equal(reaction.hitlagFrames, 12);
+  assert.equal(reaction.hitstunFrames, 31);
+});
+
+test('DI and LSI alter trajectory, and hitlag pauses launch until KO bounds are crossed', () => {
+  const base = applyDirectionalInfluence(45, { diX: 1, lsi: -1, sdiX: 1 });
+  assert.ok(base.angle !== 45);
+  assert.equal(base.speedMultiplier, 0.92);
+  assert.equal(base.sdi.x, 3);
+  const launched = applyReaction({
+    percent: 0, positionX: 239, positionY: 0, velocityX: 0, velocityY: 0,
+    hitlagFrames: 2, hitstunFrames: 30, ko: false,
+  }, {
+    damage: 10, knockback: 100, launchSpeed: 3, launchAngle: 0,
+    hitlagFrames: 2, hitstunFrames: 30, tumble: true, staleMultiplier: 1,
+  }, 1);
+  assert.equal(stepLaunch(launched).positionX, 239);
+  const crossed = stepLaunch(stepLaunch(stepLaunch(launched)));
+  assert.equal(crossed.ko, true);
+  assert.equal(crossed.positionX, 0);
+});
+
+test('Ultimate stale queue preserves repeats and applies the published slot reductions', () => {
+  assert.equal(staleDamageMultiplier([], 'jab'), 1.05);
+  assert.equal(staleDamageMultiplier(['jab'], 'jab'), 0.91);
+  assert.deepEqual(staleQueueAfterMove(['jab'], 'jab'), ['jab', 'jab']);
+});
+
+test('Ultimate hitstun cancel windows and landing recovery states use the documented thresholds', () => {
+  assert.equal(canCancelHitstun(40, 2.49, 'air-dodge'), true);
+  assert.equal(canCancelHitstun(40, 2.5, 'air-dodge'), false);
+  assert.equal(canCancelHitstun(45, 1.99, 'aerial'), true);
+  assert.equal(resolveLandingRecovery('ground', true, true), 'ground-tech');
+  assert.equal(resolveLandingRecovery('wall', true, false), 'missed-tech');
+  assert.equal(resolveLandingRecovery('ceiling', false, true), 'knockdown');
+  assert.equal(chooseGetup('roll-right'), 'getup-roll-right');
 });
 
 function analog(

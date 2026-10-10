@@ -160,6 +160,23 @@
   color: #ffe0a8;
   font: 800 8px var(--font-title);
   letter-spacing: .08em;
+  white-space: nowrap;
+}
+
+.training-trajectory-preview {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.training-trajectory-preview polyline {
+  fill: none;
+  stroke: #ffb454;
+  stroke-width: 1.5;
+  stroke-dasharray: 2 2;
+  vector-effect: non-scaling-stroke;
 }
 
 .training-collision-overlay {
@@ -198,6 +215,49 @@
   margin-top: 7px;
   color: #42d8ee;
   font-size: .7rem;
+  letter-spacing: 0;
+  text-align: right;
+}
+
+.dummy-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: #d4dfeb;
+  font-size: .72rem;
+  letter-spacing: 0;
+}
+.dummy-controls label { display: inline-flex; align-items: center; gap: 5px; }
+.dummy-controls input {
+  width: 66px;
+  padding: 4px 5px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: #111b2a;
+  color: white;
+}
+.dummy-controls select {
+  padding: 4px 5px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: #111b2a;
+  color: white;
+}
+.dummy-controls button {
+  padding: 5px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: rgba(255,255,255,.08);
+  color: #e7eff7;
+  font-size: .68rem;
+}
+.reaction-readout {
+  margin-top: 5px;
+  color: #ffc879;
+  font: 600 .65rem var(--font-mono);
   letter-spacing: 0;
   text-align: right;
 }
