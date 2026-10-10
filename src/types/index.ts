@@ -17,15 +17,26 @@ export interface PlayerProfile {
   characterId: string;
   colorIndex: number;
   keybinds: PlayerKeybinds;
+  buttonSettings?: PlayerButtonSettings;
+  controllerType?: ControllerType;
   controllerSettings?: PlayerControllerSettings;
   isReady: boolean;
 }
 
 export interface PlayerControllerSettings {
+  rumbleEnabled: boolean;
+  abSmashEnabled: boolean;
   stickJumpEnabled: boolean;
-  /** 0–100. Higher values allow a longer fast-flick recognition window. */
-  stickSensitivity: number;
+  stickSensitivity: 'low' | 'normal' | 'high';
 }
+
+export type ControllerType = 'pro' | 'gamecube' | 'joycon-sideways' | 'keyboard';
+export type ButtonAction =
+  | 'attack' | 'special' | 'jump' | 'shield' | 'grab'
+  | 'smash' | 'tilt' | 'taunt-up' | 'taunt-side' | 'taunt-down' | 'none';
+export type ControllerButton = 'A' | 'B' | 'X' | 'Y' | 'L' | 'R' | 'Z' | 'ZL' | 'ZR' | 'SL' | 'SR' | 'Plus' | 'Minus' | 'L3' | 'R3' | 'DUp' | 'DDown' | 'DLeft' | 'DRight' | 'KeyW' | 'KeyA' | 'KeyS' | 'KeyD' | 'KeyJ' | 'KeyK' | 'KeyL' | 'KeyU' | 'KeyI' | 'KeyO' | 'Space' | 'Enter';
+export type ButtonActionMap = Partial<Record<ControllerButton, ButtonAction>>;
+export type PlayerButtonSettings = Partial<Record<ControllerType, ButtonActionMap>>;
 
 export interface Character {
   id: string;
@@ -268,6 +279,12 @@ export const SMASH_INPUTS: SmashInput[] = [
   'tauntUp', 'tauntDown', 'tauntLeft', 'tauntRight',
   'tiltAttack', 'start',
 ];
+
+export const CONTROLLER_BUTTONS: Record<Exclude<ControllerType, 'keyboard'>, ControllerButton[]> = {
+  pro: ['A', 'B', 'X', 'Y', 'L', 'R', 'ZL', 'ZR', 'Plus', 'Minus', 'L3', 'R3', 'DUp', 'DDown', 'DLeft', 'DRight'],
+  gamecube: ['A', 'B', 'X', 'Y', 'L', 'R', 'Z', 'Plus', 'Minus', 'L3', 'R3', 'DUp', 'DDown', 'DLeft', 'DRight'],
+  'joycon-sideways': ['A', 'B', 'X', 'Y', 'L', 'R', 'SL', 'SR', 'Plus', 'Minus', 'L3', 'DUp', 'DDown', 'DLeft', 'DRight'],
+};
 
 export const CHARACTERS: Character[] = [
   {

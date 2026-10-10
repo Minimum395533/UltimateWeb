@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   DEFAULT_CONTROLLER_SETTINGS,
-  getFastInputWindowFrames,
+  getSmashFlickWindowFrames,
   normalizeControllerSettings,
 } from '../../src/physics/controllerSettings.ts';
 import {
@@ -588,10 +588,15 @@ test('turnaround dashes wait three frames before accelerating in the new directi
   assert.ok(Number(state.velocityX) < 0);
 });
 
-test('sensitivity changes the fast-flick window and stick jump emits input only when enabled', () => {
-  assert.equal(getFastInputWindowFrames(normalizeControllerSettings({ stickSensitivity: 0 })), 2);
-  assert.equal(getFastInputWindowFrames(DEFAULT_CONTROLLER_SETTINGS), 5);
-  assert.equal(getFastInputWindowFrames(normalizeControllerSettings({ stickSensitivity: 100 })), 8);
+test('sensitivity exposes exact SmashWiki flick windows and stick jump remains independently configurable', () => {
+  for (const [sensitivity, expected] of [['low', [5, 3, 7]], ['normal', [6, 4, 8]], ['high', [7, 5, 9]]]) {
+    const settings = normalizeControllerSettings({ stickSensitivity: sensitivity });
+    assert.deepEqual([
+      getSmashFlickWindowFrames(settings, 'forward-smash'),
+      getSmashFlickWindowFrames(settings, 'vertical-smash'),
+      getSmashFlickWindowFrames(settings, 'side-special'),
+    ], expected);
+  }
 
   const enabled = readTrainingControlInput(
     {},
@@ -631,6 +636,51 @@ test('sensitivity changes the fast-flick window and stick jump emits input only 
     { ...DEFAULT_CONTROLLER_SETTINGS, stickJumpEnabled: false },
   );
   assert.equal(disabledStickDoesNotStartJump.jumpSquatFramesRemaining, 0);
+});
+
+test('legacy numeric settings migrate to Low/Normal/High and sensitivity never changes dash movement', () => {
+  assert.equal(normalizeControllerSettings({ stickSensitivity: 0 }).stickSensitivity, 'low');
+  assert.equal(normalizeControllerSettings({ stickSensitivity: 50 }).stickSensitivity, 'normal');
+  assert.equal(normalizeControllerSettings({ stickSensitivity: 100 }).stickSensitivity, 'high');
+  const low = normalizeControllerSettings({ stickSensitivity: 'low' });
+  const high = normalizeControllerSettings({ stickSensitivity: 'high' });
+  const start = createInitialTrainingMovementState();
+  const input = { horizontal: 1, isDigital: false, downHeld: false, jumpPressed: false, jumpHeld: false, stickJumpAction: false };
+  assert.deepEqual(stepTrainingMovement(start, input, low), stepTrainingMovement(start, input, high));
+});
+
+test('training jump reads the configured physical-button action map', () => {
+  const remapped = readTrainingControlInput(
+    {},
+    new Set(),
+    [createGamepad([], [1])],
+    DEFAULT_CONTROLLER_SETTINGS,
+    new Set(),
+    { pro: { A: 'jump', X: 'none' } },
+    'pro',
+  );
+  assert.equal(remapped.jumpHeld, true);
+  const keyboard = readTrainingControlInput(
+    {},
+    new Set(['KeyO']),
+    [],
+    DEFAULT_CONTROLLER_SETTINGS,
+    new Set(),
+    { keyboard: { KeyO: 'jump', KeyJ: 'none', Space: 'none' } },
+    'keyboard',
+  );
+  assert.equal(keyboard.jumpHeld, true);
+});
+
+test('training input exposes assigned attack actions and optional A+B Smash', () => {
+  const pad = createGamepad([], [0, 1]);
+  const bindings = { pro: { A: 'attack', B: 'special' } };
+  const normal = readTrainingControlInput({}, new Set(), [pad], DEFAULT_CONTROLLER_SETTINGS, new Set(), bindings, 'pro');
+  assert.equal(normal.actions.attack, true);
+  assert.equal(normal.actions.special, true);
+  assert.equal(normal.actions.smash, false);
+  const abSmash = readTrainingControlInput({}, new Set(), [pad], { ...DEFAULT_CONTROLLER_SETTINGS, abSmashEnabled: true }, new Set(), bindings, 'pro');
+  assert.equal(abSmash.actions.smash, true);
 });
 
 test('configured keyboard, gamepad, and rebound jump buttons are read as held input', () => {
@@ -742,7 +792,7 @@ test('controller options persist and older saved players receive safe defaults',
   assert.equal(storage.has(APP_STATE_STORAGE_KEY), true);
   assert.deepEqual(
     loadAppState(memoryStorage, fallback).players[0].controllerSettings,
-    { stickJumpEnabled: false, stickSensitivity: 82 },
+    { rumbleEnabled: true, abSmashEnabled: false, stickJumpEnabled: false, stickSensitivity: 'high' },
   );
 
   const { controllerSettings: _oldSetting, ...legacyPlayer } = defaultPlayer;
@@ -754,4 +804,10 @@ test('controller options persist and older saved players receive safe defaults',
     loadAppState(memoryStorage, fallback).players[0].controllerSettings,
     DEFAULT_CONTROLLER_SETTINGS,
   );
+  const migratedPlayer = loadAppState(memoryStorage, fallback).players[0];
+  assert.equal(migratedPlayer.controllerType, 'pro');
+  assert.equal(migratedPlayer.buttonSettings.pro.A, 'attack');
+  assert.equal(migratedPlayer.buttonSettings.pro.B, 'special');
+  assert.equal(migratedPlayer.buttonSettings.gamecube.Z, 'shield');
+  assert.equal(migratedPlayer.buttonSettings.keyboard.KeyJ, 'jump');
 });

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useGameState } from '../hooks/useGameState';
 import { DEFAULT_KEYBINDS_KEYBOARD_P1 } from '../types';
-import type { PlayerKeybinds } from '../types';
+import type { PlayerButtonSettings, PlayerKeybinds } from '../types';
 import type { AnimationDraft } from '../types/frameData';
 import { normalizeControllerSettings } from '../physics/controllerSettings';
 import {
@@ -53,6 +53,8 @@ const TrainingScreen: React.FC = () => {
   const pressedKeys = useRef(new Set<string>());
   const newlyPressedKeys = useRef(new Set<string>());
   const bindingsRef = useRef<PlayerKeybinds>(DEFAULT_KEYBINDS_KEYBOARD_P1);
+  const buttonSettingsRef = useRef<PlayerButtonSettings | undefined>(undefined);
+  const controllerTypeRef = useRef(player?.controllerType ?? 'pro');
   const controllerSettingsRef = useRef(normalizeControllerSettings(undefined));
   const controllerSettings = useMemo(
     () => normalizeControllerSettings(player?.controllerSettings),
@@ -62,6 +64,8 @@ const TrainingScreen: React.FC = () => {
   useEffect(() => {
     bindingsRef.current = player?.keybinds ?? DEFAULT_KEYBINDS_KEYBOARD_P1;
     controllerSettingsRef.current = controllerSettings;
+    buttonSettingsRef.current = player?.buttonSettings;
+    controllerTypeRef.current = player?.controllerType ?? 'pro';
   }, [player?.keybinds, player?.controllerSettings, controllerSettings]);
 
   useEffect(() => {
@@ -178,6 +182,8 @@ const TrainingScreen: React.FC = () => {
             gamepads,
             controllerSettingsRef.current,
             newlyPressedKeys.current,
+            buttonSettingsRef.current,
+            controllerTypeRef.current,
           );
           movementRef.current = stepTrainingMovement(
             movementRef.current,

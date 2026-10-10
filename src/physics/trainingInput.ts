@@ -2,8 +2,9 @@ import {
   DEFAULT_KEYBINDS_GAMEPAD,
   DEFAULT_KEYBINDS_KEYBOARD_P1,
 } from '../types/index.ts';
-import type { InputBinding, PlayerKeybinds } from '../types';
+import type { ButtonAction, ControllerType, InputBinding, PlayerButtonSettings, PlayerKeybinds } from '../types';
 import {
+  getDefaultButtonActions,
   normalizeControllerSettings,
   shouldTriggerStickJump,
 } from './controllerSettings.ts';
@@ -31,6 +32,18 @@ export interface TrainingControlInput {
   jumpHeld: boolean;
   /** Enabled up-stick input, exposed separately for the training readout. */
   stickJumpAction: boolean;
+  actions: {
+    attack: boolean;
+    special: boolean;
+    smash: boolean;
+    tilt: boolean;
+    shield: boolean;
+    grab: boolean;
+    jump: boolean;
+    tauntUp: boolean;
+    tauntSide: boolean;
+    tauntDown: boolean;
+  };
 }
 
 interface BindingValue {
@@ -111,6 +124,8 @@ export function readTrainingControlInput(
   gamepads: readonly (GamepadSnapshot | null)[],
   controllerSettings: unknown,
   newlyPressedKeys: ReadonlySet<string> = new Set(),
+  buttonSettings?: PlayerButtonSettings,
+  controllerType: ControllerType = 'pro',
 ): TrainingControlInput {
   const gamepad = gamepads.find((pad): pad is GamepadSnapshot => pad !== null) ?? null;
   const settings = normalizeControllerSettings(controllerSettings);
@@ -125,6 +140,47 @@ export function readTrainingControlInput(
   const jumpAltKeyboardBinding = getBinding(bindings, 'keyboard', 'jumpAlt');
   const jumpKeyboard = readBinding(jumpKeyboardBinding, pressedKeys, null);
   const jumpAltKeyboard = readBinding(jumpAltKeyboardBinding, pressedKeys, null);
+  const actionMap = { ...getDefaultButtonActions(controllerType), ...(buttonSettings?.[controllerType] ?? {}) };
+  const gamepadPhysicalButton: Record<string, number> = {
+    B: 0, A: 1, Y: 2, X: 3, L: 4, R: 5, ZL: 6, ZR: 7,
+    Minus: 8, Plus: 9, L3: 10, R3: 11,
+  };
+  const keyCodeForPhysical: Record<string, string> = {
+    KeyW: 'KeyW', KeyA: 'KeyA', KeyS: 'KeyS', KeyD: 'KeyD', KeyJ: 'KeyJ',
+    KeyK: 'KeyK', KeyL: 'KeyL', KeyU: 'KeyU', KeyI: 'KeyI', KeyO: 'KeyO',
+    Space: 'Space', Enter: 'Enter',
+  };
+  const actionPressed = (action: ButtonAction, device: 'keyboard' | 'gamepad') => {
+    for (const [physical, assigned] of Object.entries(actionMap)) {
+      if (assigned !== action) continue;
+      if (device === 'keyboard' && controllerType === 'keyboard') {
+        const code = keyCodeForPhysical[physical];
+        if (code && pressedKeys.has(code)) return true;
+      }
+      if (device === 'gamepad' && controllerType !== 'keyboard') {
+        if (physical === 'R3' && gamepad && gamepad.axes.length >= 4
+          && (Math.abs(gamepad.axes[2]) > 0.65 || Math.abs(gamepad.axes[3]) > 0.65)) return true;
+        const index = gamepadPhysicalButton[physical];
+        if (index !== undefined && buttonPressed(gamepad, index)) return true;
+      }
+    }
+    return false;
+  };
+  const jumpActionKeyboard = actionPressed('jump', 'keyboard');
+  const jumpActionGamepad = actionPressed('jump', 'gamepad');
+  const actions = {
+    attack: actionPressed('attack', controllerType === 'keyboard' ? 'keyboard' : 'gamepad'),
+    special: actionPressed('special', controllerType === 'keyboard' ? 'keyboard' : 'gamepad'),
+    smash: actionPressed('smash', controllerType === 'keyboard' ? 'keyboard' : 'gamepad'),
+    tilt: actionPressed('tilt', controllerType === 'keyboard' ? 'keyboard' : 'gamepad'),
+    shield: actionPressed('shield', controllerType === 'keyboard' ? 'keyboard' : 'gamepad'),
+    grab: actionPressed('grab', controllerType === 'keyboard' ? 'keyboard' : 'gamepad'),
+    jump: jumpActionKeyboard || jumpActionGamepad,
+    tauntUp: actionPressed('taunt-up', controllerType === 'keyboard' ? 'keyboard' : 'gamepad'),
+    tauntSide: actionPressed('taunt-side', controllerType === 'keyboard' ? 'keyboard' : 'gamepad'),
+    tauntDown: actionPressed('taunt-down', controllerType === 'keyboard' ? 'keyboard' : 'gamepad'),
+  };
+  if (settings.abSmashEnabled && actions.attack && actions.special) actions.smash = true;
   const jumpGamepad = readBinding(getBinding(bindings, 'gamepad', 'jump'), pressedKeys, gamepad);
   const jumpAltGamepad = readBinding(getBinding(bindings, 'gamepad', 'jumpAlt'), pressedKeys, gamepad);
 
@@ -145,7 +201,9 @@ export function readTrainingControlInput(
     (jumpKeyboardBinding.keyCode && newlyPressedKeys.has(jumpKeyboardBinding.keyCode))
     || (jumpAltKeyboardBinding.keyCode && newlyPressedKeys.has(jumpAltKeyboardBinding.keyCode)),
   );
-  const jumpHeld = jumpKeyboard.value > 0
+  const jumpHeld = (controllerType === 'keyboard' ? jumpActionKeyboard : false)
+    || (controllerType !== 'keyboard' ? jumpActionGamepad : false)
+    || jumpKeyboard.value > 0
     || jumpAltKeyboard.value > 0
     || jumpGamepad.value > 0
     || jumpAltGamepad.value > 0
@@ -171,5 +229,6 @@ export function readTrainingControlInput(
     jumpPressed,
     jumpHeld,
     stickJumpAction,
+    actions,
   };
 }

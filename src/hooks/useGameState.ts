@@ -6,7 +6,7 @@ import type {
   PlayerKeybinds,
   PlayerControllerSettings,
 } from '../types';
-import { DEFAULT_CONTROLLER_SETTINGS, normalizeControllerSettings } from '../physics/controllerSettings';
+import { DEFAULT_CONTROLLER_SETTINGS, getDefaultButtonActions, normalizeControllerSettings } from '../physics/controllerSettings';
 import { loadAppState, saveAppState } from '../state/appStateStorage';
 import { 
   DEFAULT_KEYBINDS_KEYBOARD_P1,
@@ -20,6 +20,13 @@ const initialPlayers: PlayerProfile[] = [
     characterId: 'captain_falcon',
     colorIndex: 0,
     keybinds: DEFAULT_KEYBINDS_KEYBOARD_P1,
+    controllerType: 'pro',
+    buttonSettings: {
+      pro: getDefaultButtonActions('pro'),
+      gamecube: getDefaultButtonActions('gamecube'),
+      'joycon-sideways': getDefaultButtonActions('joycon-sideways'),
+      keyboard: getDefaultButtonActions('keyboard'),
+    },
     controllerSettings: { ...DEFAULT_CONTROLLER_SETTINGS },
     isReady: false,
   },
@@ -29,6 +36,13 @@ const initialPlayers: PlayerProfile[] = [
     characterId: 'captain_falcon',
     colorIndex: 1,
     keybinds: DEFAULT_KEYBINDS_KEYBOARD_P2,
+    controllerType: 'pro',
+    buttonSettings: {
+      pro: getDefaultButtonActions('pro'),
+      gamecube: getDefaultButtonActions('gamecube'),
+      'joycon-sideways': getDefaultButtonActions('joycon-sideways'),
+      keyboard: getDefaultButtonActions('keyboard'),
+    },
     controllerSettings: { ...DEFAULT_CONTROLLER_SETTINGS },
     isReady: false,
   },

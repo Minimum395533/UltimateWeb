@@ -1,431 +1,177 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameState } from '../hooks/useGameState';
 import { useInput } from '../hooks/useInput';
-import type { DetectedInput } from '../hooks/useInput';
-import { SMASH_INPUTS } from '../types';
-import type { InputBinding, InputDevice, PlayerKeybinds, SmashInput } from '../types';
+import { CONTROLLER_BUTTONS } from '../types';
+import type { ButtonAction, ButtonActionMap, ControllerButton, ControllerType } from '../types';
+import { DEFAULT_CONTROLLER_SETTINGS, getDefaultButtonActions } from '../physics/controllerSettings';
 import '../styles/KeybindsScreen.css';
 
-interface BindingRow {
-  input: SmashInput;
-  action: string;
-  control: string;
-}
-
-const shoulderLeft: BindingRow[] = [
-  { input: 'specialZL', action: 'Special', control: 'ZL' },
-  { input: 'specialL', action: 'Special', control: 'L' },
-];
-
-const shoulderRight: BindingRow[] = [
-  { input: 'shield', action: 'Shield', control: 'ZR' },
-  { input: 'grab', action: 'Grab', control: 'R' },
-];
-
-const faceControls: BindingRow[] = [
-  { input: 'jump', action: 'Jump', control: 'X' },
-  { input: 'jumpAlt', action: 'Jump', control: 'Y' },
-  { input: 'attack', action: 'Attack', control: 'A' },
-  { input: 'special', action: 'Special', control: 'B' },
-  { input: 'tiltAttack', action: 'Tilt attack', control: 'R stick' },
-];
-
-const tauntControls: BindingRow[] = [
-  { input: 'tauntUp', action: 'Up taunt', control: '↑' },
-  { input: 'tauntLeft', action: 'Side taunt · left', control: '←' },
-  { input: 'tauntRight', action: 'Side taunt · right', control: '→' },
-  { input: 'tauntDown', action: 'Down taunt', control: '↓' },
-];
-
-const movementControls: BindingRow[] = [
-  { input: 'up', action: 'Move up', control: '↑' },
-  { input: 'left', action: 'Move left', control: '←' },
-  { input: 'right', action: 'Move right', control: '→' },
-  { input: 'down', action: 'Move down', control: '↓' },
-];
-
-const otherControls: BindingRow[] = [
-  { input: 'dodge', action: 'Dodge', control: '−' },
-  { input: 'start', action: 'Pause / start', control: '+' },
-];
+const ACTION_LABELS: Record<ButtonAction, string> = {
+  attack: 'Attack', special: 'Special', jump: 'Jump', shield: 'Shield', grab: 'Grab',
+  smash: 'Smash Attack', tilt: 'Tilt Attack', 'taunt-up': 'Up Taunt',
+  'taunt-side': 'Side Taunt', 'taunt-down': 'Down Taunt', none: 'Nothing',
+};
+const FACE: ButtonAction[] = ['attack', 'special', 'jump', 'shield', 'grab', 'smash', 'tilt', 'none'];
+const SHOULDER: ButtonAction[] = ['shield', 'grab', 'jump', 'attack', 'special', 'smash', 'none'];
+const DIRECTION: Record<string, ButtonAction[]> = {
+  DUp: ['taunt-up', 'none'], DDown: ['taunt-down', 'none'],
+  DLeft: ['taunt-side', 'none'], DRight: ['taunt-side', 'none'],
+};
+const KEY_BUTTONS: ControllerButton[] = ['KeyJ', 'KeyK', 'KeyL', 'KeyU', 'KeyI', 'KeyO', 'Space', 'Enter'];
+const FIXED_KEYS = ['W', 'A', 'S', 'D'];
+const physicalName: Record<ControllerButton, string> = {
+  A: 'A', B: 'B', X: 'X', Y: 'Y', L: 'L', R: 'R', Z: 'Z', ZL: 'ZL', ZR: 'ZR',
+  SL: 'SL', SR: 'SR', Plus: '+', Minus: '−', L3: 'L Stick', R3: 'R Stick',
+  DUp: '↑', DDown: '↓', DLeft: '←', DRight: '→',
+  KeyW: 'W', KeyA: 'A', KeyS: 'S', KeyD: 'D', KeyJ: 'J', KeyK: 'K',
+  KeyL: 'L', KeyU: 'U', KeyI: 'I', KeyO: 'O', Space: 'Space', Enter: 'Enter',
+};
+const buttonActions = (button: ControllerButton): ButtonAction[] =>
+  DIRECTION[button] ?? (button === 'R3' ? ['smash', 'tilt', 'special', 'none']
+    : ['L', 'R', 'Z', 'ZL', 'ZR', 'SL', 'SR'].includes(button) ? SHOULDER : FACE);
 
 const KeybindsScreen: React.FC = () => {
   const navigate = useNavigate();
-  const {
-    state,
-    selectPlayerForEdit,
-    updatePlayerKeybinds,
-    updatePlayerName,
-  } = useGameState();
-  
-  const {
-    gamepads,
-    startListeningForInput,
-    stopListeningForInput,
-    getInputDisplayName,
-    createKeybindsWithDefault,
-  } = useInput();
+  const { state, selectPlayerForEdit, updatePlayerName, updatePlayerControllerSettings, updatePlayer } = useGameState();
+  const { gamepads } = useInput();
+  const [playerIndex, setPlayerIndex] = useState(state.selectedPlayerIndex ?? 0);
+  const [controller, setController] = useState<ControllerType>(state.players[state.selectedPlayerIndex ?? 0]?.controllerType ?? 'pro');
+  const [selected, setSelected] = useState<ControllerButton | null>('A');
+  const [testing, setTesting] = useState(false);
+  const [liveInput, setLiveInput] = useState('Press a button or move a stick to test.');
+  const [saved, setSaved] = useState(false);
+  const player = state.players[playerIndex] ?? state.players[0];
+  const settings = player?.controllerSettings ?? DEFAULT_CONTROLLER_SETTINGS;
+  const bindings: ButtonActionMap = useMemo(() => ({
+    ...getDefaultButtonActions(controller),
+    ...(player?.buttonSettings?.[controller] ?? {}),
+  }), [controller, player?.buttonSettings]);
+  const buttonList = controller === 'keyboard' ? KEY_BUTTONS : CONTROLLER_BUTTONS[controller];
+  const selectedActions = selected ? buttonActions(selected) : [];
+  const actionFor = (button: ControllerButton) => bindings[button] ?? 'none';
 
-  const [manualPlayerIndex, setManualPlayerIndex] = useState<number | null>(null);
-  const selectedPlayerIndex = manualPlayerIndex ?? state.selectedPlayerIndex ?? 0;
-  const [selectedDevice, setSelectedDevice] = useState<InputDevice>('gamepad');
-  const [editingInput, setEditingInput] = useState<SmashInput | null>(null);
-  const [isTesting, setIsTesting] = useState(false);
-  const [testFeedback, setTestFeedback] = useState('');
-  const [saveFeedback, setSaveFeedback] = useState('');
-
-  useEffect(() => {
-    const handleInputDetected = (event: Event) => {
-      const detectedInput = (event as CustomEvent<DetectedInput>).detail;
-      if (!editingInput || !detectedInput || detectedInput.type !== selectedDevice) return;
-
-      const player = state.players[selectedPlayerIndex];
-      if (!player) return;
-
-      const newBinding: InputBinding = {
-        device: detectedInput.type,
-        keyCode: detectedInput.code,
-        buttonIndex: detectedInput.buttonIndex,
-        axisIndex: detectedInput.axisIndex,
-        axisDirection: detectedInput.axisDirection,
-      };
-      const bindingKey = `${selectedDevice}:${editingInput}`;
-      const newKeybinds: PlayerKeybinds = {
-        ...player.keybinds,
-        [bindingKey]: newBinding,
-      };
-
-      updatePlayerKeybinds(selectedPlayerIndex, newKeybinds);
-      setEditingInput(null);
-      setSaveFeedback('');
-      stopListeningForInput();
-    };
-
-    window.addEventListener('inputDetected', handleInputDetected);
-    return () => {
-      window.removeEventListener('inputDetected', handleInputDetected);
-    };
-  }, [editingInput, selectedDevice, selectedPlayerIndex, state.players, updatePlayerKeybinds, stopListeningForInput]);
-
-  useEffect(() => {
-    if (!isTesting) return;
-
-    const handleKeyboardTest = (event: KeyboardEvent) => {
-      setTestFeedback(`Keyboard · ${event.key === ' ' ? 'Space' : event.key}`);
-    };
-    const gamepadTimer = window.setInterval(() => {
-      const pads = navigator.getGamepads?.() ?? [];
-      for (let index = 0; index < pads.length; index += 1) {
-        const pad = pads[index];
+  React.useEffect(() => {
+    if (!testing) return;
+    const onKey = (event: KeyboardEvent) => setLiveInput(`Keyboard · ${event.key === ' ' ? 'Space' : event.key}`);
+    const timer = window.setInterval(() => {
+      for (const [padIndex, pad] of Array.from(navigator.getGamepads?.() ?? []).entries()) {
         if (!pad) continue;
-        const pressedButtonIndex = pad.buttons.findIndex((button) => button.pressed);
-        if (pressedButtonIndex >= 0) {
-          setTestFeedback(`${pad.id || `Controller ${index + 1}`} · ${getInputDisplayName({
-            device: 'gamepad',
-            buttonIndex: pressedButtonIndex,
-          })}`);
+        const pressed = pad.buttons.findIndex((button) => button.pressed);
+        if (pressed !== -1) {
+          const names = ['B', 'A', 'Y', 'X', 'L', 'R', 'ZL', 'ZR', '−', '+'];
+          const physical = names[pressed] ?? `Button ${pressed}`;
+          const assigned = Object.entries(bindings).find(([key]) => physicalName[key as ControllerButton] === physical)?.[1];
+          setLiveInput(`${pad.id || `Controller ${padIndex + 1}`} · ${physical} → ${assigned ? ACTION_LABELS[assigned] : 'Unassigned'}`);
           return;
         }
-        const movedAxisIndex = pad.axes.findIndex((axis) => Math.abs(axis) > 0.65);
-        if (movedAxisIndex >= 0) {
-          const axisValue = pad.axes[movedAxisIndex];
-          setTestFeedback(`${pad.id || `Controller ${index + 1}`} · ${getInputDisplayName({
-            device: 'gamepad',
-            axisIndex: movedAxisIndex,
-            axisDirection: axisValue > 0 ? 'positive' : 'negative',
-          })}`);
+        if (pad.axes.length >= 2 && (Math.abs(pad.axes[0]) > 0.2 || Math.abs(pad.axes[1]) > 0.2)) {
+          setLiveInput(`${pad.id || 'Controller'} · Left stick ${pad.axes[0].toFixed(2)}, ${pad.axes[1].toFixed(2)} → movement`);
+          return;
+        }
+        if (pad.axes.length >= 4 && (Math.abs(pad.axes[2]) > 0.2 || Math.abs(pad.axes[3]) > 0.2)) {
+          const action = bindings.R3 ? ACTION_LABELS[bindings.R3] : 'Unassigned';
+          setLiveInput(`${pad.id || 'Controller'} · C-Stick ${pad.axes[2].toFixed(2)}, ${pad.axes[3].toFixed(2)} → ${action}`);
           return;
         }
       }
-    }, 60);
+    }, 50);
+    window.addEventListener('keydown', onKey);
+    return () => { window.removeEventListener('keydown', onKey); window.clearInterval(timer); };
+  }, [testing, bindings]);
+  const connected = gamepads[0]?.id ?? '';
+  const gamepadLabel = useMemo(() => connected ? `${connected} · Switch button labels` : 'No controller detected', [connected]);
 
-    window.addEventListener('keydown', handleKeyboardTest);
-    return () => {
-      window.removeEventListener('keydown', handleKeyboardTest);
-      window.clearInterval(gamepadTimer);
-    };
-  }, [isTesting, getInputDisplayName]);
-
-  const handleBack = () => {
-    stopListeningForInput();
-    navigate('/');
+  const updateButton = (action: ButtonAction) => {
+    if (!player || !selected) return;
+    const next = { ...(player.buttonSettings ?? {}), [controller]: { ...bindings, [selected]: action } };
+    updatePlayer(playerIndex, { buttonSettings: next });
+    setSaved(false);
   };
-
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    updatePlayerName(selectedPlayerIndex, e.target.value);
+  const updateSetting = (patch: Partial<typeof settings>) => {
+    if (player) updatePlayerControllerSettings(playerIndex, { ...settings, ...patch });
+    setSaved(false);
   };
-
-  const handlePlayerSelect = (playerIndex: number) => {
-    stopListeningForInput();
-    setEditingInput(null);
-    setIsTesting(false);
-    setManualPlayerIndex(playerIndex);
-    selectPlayerForEdit(playerIndex);
-  };
-
-  const handleDeviceSelect = (device: InputDevice) => {
-    stopListeningForInput();
-    setEditingInput(null);
-    setIsTesting(false);
-    setSelectedDevice(device);
-    setSaveFeedback('');
-  };
-
-  const handleBindInput = (input: SmashInput) => {
-    setIsTesting(false);
-    setSaveFeedback('');
-    setEditingInput(input);
-    startListeningForInput(input, selectedPlayerIndex, selectedDevice);
-  };
-
-  const handleCancelBind = () => {
-    setEditingInput(null);
-    stopListeningForInput();
-  };
-
-  const handleResetToDefault = () => {
-    const player = state.players[selectedPlayerIndex];
+  const reset = () => {
     if (!player) return;
-
-    const defaults = createKeybindsWithDefault({}, selectedPlayerIndex);
-    const resetBindings: PlayerKeybinds = { ...player.keybinds };
-    for (const input of SMASH_INPUTS) {
-      const key = `${selectedDevice}:${input}`;
-      resetBindings[key] = defaults[key];
-    }
-    updatePlayerKeybinds(selectedPlayerIndex, resetBindings);
-    setEditingInput(null);
-    stopListeningForInput();
-    setSaveFeedback('Default layout restored');
+    updatePlayer(playerIndex, { buttonSettings: { ...(player.buttonSettings ?? {}), [controller]: getDefaultButtonActions(controller) } });
+    updatePlayerControllerSettings(playerIndex, { ...DEFAULT_CONTROLLER_SETTINGS });
+    setSaved(false);
   };
+  const save = () => { localStorage.setItem('ultimateWebState', JSON.stringify(state)); setSaved(true); };
+  const setPlayer = (index: number) => { setPlayerIndex(index); selectPlayerForEdit(index); setSelected(null); };
 
-  const handleSave = () => {
-    localStorage.setItem('ultimateWebState', JSON.stringify(state));
-    setSaveFeedback('Layout saved');
-  };
-
-  const selectedPlayer = state.players[selectedPlayerIndex] ?? state.players[0];
-  const filledKeybinds = createKeybindsWithDefault(selectedPlayer?.keybinds || {}, selectedPlayerIndex);
-  const connectedControllerLabel = gamepads.length > 0
-    ? `${gamepads.length} controller${gamepads.length === 1 ? '' : 's'} connected`
-    : 'No controller detected';
-
-  const renderBindingRows = (rows: BindingRow[]) => rows.map(({ input, action, control }) => {
-    const binding = filledKeybinds[`${selectedDevice}:${input}`];
-    const displayName = binding ? getInputDisplayName(binding) : 'Not set';
-    const isEditing = editingInput === input;
-
-    return (
-      <div className={`mapping-row ${isEditing ? 'is-listening' : ''}`} key={input}>
-        <div className="mapping-action">
-          <span className="hardware-key">{control}</span>
-          <span className="mapping-action-name">{action}</span>
-        </div>
-        <button
-          type="button"
-          className={`binding-button ${isEditing ? 'editing' : ''}`}
-          onClick={() => handleBindInput(input)}
-          aria-label={`Rebind ${action} on ${control}; current binding ${displayName}`}
-          aria-pressed={isEditing}
-        >
-          <span>{isEditing ? 'PRESS INPUT' : displayName}</span>
-          <span className="binding-edit-mark">{isEditing ? '···' : 'EDIT'}</span>
-        </button>
+  return <main className="keybinds-screen controls-screen ultimate-controls">
+    <header className="controls-topline">
+      <button className="back-button controls-back" onClick={() => navigate('/')}><span>←</span> BACK</button>
+      <div className="controls-breadcrumb"><span>OPTIONS</span><span>›</span><strong>{player?.name || 'PLAYER'}’S BUTTON SETTINGS</strong></div>
+      <span className="controls-version">CONTROL SETUP / 01</span>
+    </header>
+    <div className="controls-title-row">
+      <div><p className="controls-eyebrow">CUSTOMIZE YOUR FIGHTER</p><h1>BUTTON SETTINGS</h1><p className="controls-description">Choose a player and assign an action to each physical button.</p></div>
+      <div className="player-tabs" aria-label="Player profiles">{state.players.map((item, index) =>
+        <button key={item.id} className={`player-tab ${index === playerIndex ? 'active' : ''}`} onClick={() => setPlayer(index)}>
+          <span className="player-tab-index">P{index + 1}</span><span>{item.name}</span>
+        </button>)}</div>
+    </div>
+    <section className="ultimate-controls-toolbar">
+      <label>PLAYER NAME<input value={player?.name ?? ''} maxLength={20} onChange={(event) => { updatePlayerName(playerIndex, event.target.value); setSaved(false); }} /></label>
+      <label>CONTROLLER TYPE<select value={controller} onChange={(event) => { const type = event.target.value as ControllerType; setController(type); if (player) updatePlayer(playerIndex, { controllerType: type }); setSelected(null); setSaved(false); }}>
+        <option value="pro">Pro Controller / dual Joy-Con</option><option value="gamecube">GameCube Controller</option><option value="joycon-sideways">Sideways Joy-Con</option><option value="keyboard">Keyboard (PC)</option>
+      </select></label>
+      <span className={`ultimate-gamepad-status ${connected ? 'is-connected' : ''}`}>● {connected ? gamepadLabel : controller === 'keyboard' ? 'Keyboard ready' : gamepadLabel}</span>
+    </section>
+    <section className="ultimate-controls-board">
+      <div className="ultimate-callouts ultimate-callouts-left">
+        {buttonList.filter((button) => ['L', 'ZL', 'DUp', 'DDown', 'DLeft', 'DRight'].includes(button)).map((button) =>
+          <button key={button} className={`ultimate-callout ${selected === button ? 'is-selected' : ''}`} onClick={() => setSelected(button)}>
+            <span>{ACTION_LABELS[actionFor(button)]}</span><b>{physicalName[button]}</b>
+          </button>)}
       </div>
-    );
-  });
-
-  return (
-    <main className="keybinds-screen controls-screen">
-      <div className="controls-topline">
-        <button className="back-button controls-back" onClick={handleBack}>
-          <span aria-hidden="true">←</span> BACK
-        </button>
-        <div className="controls-breadcrumb">
-          <span>OPTIONS</span>
-          <span aria-hidden="true">›</span>
-          <strong>{selectedPlayer?.name || 'PLAYER 1'}’S BUTTON SETTINGS</strong>
-        </div>
-        <span className="controls-version">CONTROL SETUP / 01</span>
+      {controller === 'keyboard' ? <div className="ultimate-keyboard">
+        <p>KEYBOARD · SELECT A KEY TO ASSIGN ITS ACTION</p><div>{FIXED_KEYS.map((key) => <span className="keyboard-fixed" key={key}>{key}<small>Move</small></span>)}{KEY_BUTTONS.map((key) => <button key={key} className={selected === key ? 'is-selected' : ''} onClick={() => setSelected(key)}>{physicalName[key]}<small>{ACTION_LABELS[actionFor(key)]}</small></button>)}</div>
+        <small>WASD movement and pause are fixed. Other keys can be assigned actions below.</small>
+      </div> : <div className={`ultimate-controller-illustration ${controller}`}>
+        <div className="controller-fixed stick-left">CONTROL<br/>STICK</div>
+        <div className="controller-center-mark">{controller === 'gamecube' ? 'GC' : controller === 'joycon-sideways' ? 'JOY-CON' : 'SMASH'}</div>
+        {buttonList.filter((button) => !['DUp', 'DDown', 'DLeft', 'DRight', 'L3'].includes(button)).map((button) =>
+          <button key={button} className={`ultimate-physical-button button-${button.toLowerCase()} ${selected === button ? 'is-selected' : ''}`}
+            onClick={() => setSelected(button)} aria-label={`${physicalName[button]}: ${ACTION_LABELS[actionFor(button)]}`}>
+            <b>{physicalName[button]}</b><small>{ACTION_LABELS[actionFor(button)]}</small>
+          </button>)}
+        <div className="ultimate-dpad">{buttonList.filter((button) => button.startsWith('D')).map((button) =>
+          <button key={button} className={`ultimate-physical-button dpad-${button.slice(1).toLowerCase()} ${selected === button ? 'is-selected' : ''}`} onClick={() => setSelected(button)}>{physicalName[button]}</button>)}</div>
+        <span className="controller-fixed start-fixed">+ / −<small>Start / Pause · fixed</small></span>
+      </div>}
+      <div className="ultimate-callouts ultimate-callouts-right">
+        {buttonList.filter((button) => ['R', 'ZR', 'A', 'B', 'X', 'Y', 'R3'].includes(button)).map((button) =>
+          <button key={button} className={`ultimate-callout ${selected === button ? 'is-selected' : ''}`} onClick={() => setSelected(button)}>
+            <b>{physicalName[button]}</b><span>{button === 'R3' ? 'C-Stick · ' : ''}{ACTION_LABELS[actionFor(button)]}</span>
+          </button>)}
       </div>
-
-      <div className="controls-title-row">
-        <div>
-          <p className="controls-eyebrow">CUSTOMIZE YOUR FIGHTER</p>
-          <h1>BUTTON SETTINGS</h1>
-          <p className="controls-description">Choose a binding, then press the key or controller input you want to use.</p>
-        </div>
-        <div className="player-tabs" role="tablist" aria-label="Choose player">
-          {state.players.map((player, index) => (
-            <button
-              key={player.id}
-              type="button"
-              role="tab"
-              aria-selected={selectedPlayerIndex === index}
-              className={`player-tab ${selectedPlayerIndex === index ? 'active' : ''}`}
-              onClick={() => handlePlayerSelect(index)}
-            >
-              <span className="player-tab-index">P{index + 1}</span>
-              <span>{player.name}</span>
-            </button>
-          ))}
-        </div>
+    </section>
+    <section className="ultimate-controls-bottom">
+      <div className="ultimate-settings">
+        <h2>Other Settings</h2>
+        <label><input type="checkbox" checked={settings.rumbleEnabled} onChange={(event) => updateSetting({ rumbleEnabled: event.target.checked })}/> Rumble</label>
+        <label><input type="checkbox" checked={settings.abSmashEnabled} onChange={(event) => updateSetting({ abSmashEnabled: event.target.checked })}/> A+B Smash</label>
+        <label><input type="checkbox" checked={settings.stickJumpEnabled} onChange={(event) => updateSetting({ stickJumpEnabled: event.target.checked })}/> Stick Jump</label>
+        <label>Stick Sensitivity<select value={settings.stickSensitivity} onChange={(event) => updateSetting({ stickSensitivity: event.target.value as typeof settings.stickSensitivity })}>
+          <option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option></select></label>
       </div>
-
-      <section className="controls-toolbar" aria-label="Player and device settings">
-        <label className="name-edit">
-          <span>PLAYER NAME</span>
-            <input
-              type="text"
-              value={selectedPlayer?.name || ''}
-              onChange={handleNameChange}
-              className="name-input"
-              placeholder="Enter player name"
-              maxLength={20}
-            />
-        </label>
-        <div className="device-control">
-          <span className="toolbar-label">INPUT DEVICE</span>
-          <div className="device-selector" role="group" aria-label="Choose input device">
-            <button
-              type="button"
-              className={`device-option ${selectedDevice === 'gamepad' ? 'active' : ''}`}
-              aria-pressed={selectedDevice === 'gamepad'}
-              onClick={() => handleDeviceSelect('gamepad')}
-            >
-              CONTROLLER
-            </button>
-            <button
-              type="button"
-              className={`device-option ${selectedDevice === 'keyboard' ? 'active' : ''}`}
-              aria-pressed={selectedDevice === 'keyboard'}
-              onClick={() => handleDeviceSelect('keyboard')}
-            >
-              KEYBOARD
-            </button>
-          </div>
-        </div>
-        <div className={`connection-status ${gamepads.length > 0 ? 'connected' : ''}`}>
-          <span className="connection-dot" />
-          <span>{selectedDevice === 'gamepad' ? connectedControllerLabel : 'Keyboard ready'}</span>
-        </div>
-      </section>
-
-      <div className="mapping-board">
-        <div className="mapping-layout">
-          <div className="binding-bank binding-bank-left">
-            <section className="mapping-group">
-              <div className="bank-heading"><span>01</span><h2>Shoulder buttons</h2></div>
-              {renderBindingRows(shoulderLeft)}
-            </section>
-            <section className="mapping-group">
-              <div className="bank-heading"><span>02</span><h2>D-pad taunts</h2></div>
-              {renderBindingRows(tauntControls)}
-            </section>
-          </div>
-
-          <figure className="controller-figure" aria-label="Illustration of a game controller">
-            <div className="controller-trigger-row">
-              <span>ZL <i>Special</i></span>
-              <span>ZR <i>Shield</i></span>
-            </div>
-            <div className="controller-body">
-              <div className="controller-handle controller-handle-left" />
-              <div className="controller-handle controller-handle-right" />
-              <div className="controller-center">
-                <span className="controller-brand">U / W</span>
-                <span className="controller-stem" />
-              </div>
-              <div className="controller-stick controller-stick-left"><span /></div>
-              <div className="controller-dpad">
-                <span className="dpad-up">▲</span>
-                <span className="dpad-left">◀</span>
-                <span className="dpad-center" />
-                <span className="dpad-right">▶</span>
-                <span className="dpad-down">▼</span>
-              </div>
-              <div className="controller-face">
-                <span className="face-x">X</span>
-                <span className="face-y">Y</span>
-                <span className="face-a">A</span>
-                <span className="face-b">B</span>
-              </div>
-              <div className="controller-stick controller-stick-right"><span>R</span></div>
-              <span className="controller-shoulder controller-shoulder-left">L</span>
-              <span className="controller-shoulder controller-shoulder-right">R</span>
-            </div>
-            <figcaption>Select any assignment to change its input.</figcaption>
-          </figure>
-
-          <div className="binding-bank binding-bank-right">
-            <section className="mapping-group">
-              <div className="bank-heading"><span>03</span><h2>Shoulder buttons</h2></div>
-              {renderBindingRows(shoulderRight)}
-            </section>
-            <section className="mapping-group">
-              <div className="bank-heading"><span>04</span><h2>Face buttons & sticks</h2></div>
-              {renderBindingRows(faceControls)}
-            </section>
-          </div>
-        </div>
-
-        <div className="lower-binding-grid">
-          <section className="mapping-group movement-group">
-            <div className="bank-heading"><span>05</span><h2>Movement · left stick</h2></div>
-            <div className="compact-binding-grid">{renderBindingRows(movementControls)}</div>
-          </section>
-          <section className="mapping-group other-group">
-            <div className="bank-heading"><span>06</span><h2>Other settings</h2></div>
-            <div className="compact-binding-grid">{renderBindingRows(otherControls)}</div>
-          </section>
-        </div>
-
-        {editingInput && (
-          <div className="listening-indicator" role="status">
-            <span className="pulse" />
-            <span>Waiting for {selectedDevice === 'gamepad' ? 'controller input' : 'a key press'}…</span>
-            <button type="button" className="cancel-bind" onClick={handleCancelBind}>CANCEL</button>
-          </div>
-        )}
-
-        {isTesting && (
-          <div className="test-feedback" role="status">
-            <span className="test-live-dot" />
-            <span>{testFeedback || 'Press any key or controller button to test your setup.'}</span>
-            <button type="button" onClick={() => setIsTesting(false)}>STOP TEST</button>
-          </div>
-        )}
-
-        <footer className="controls-footer">
-          <button type="button" className="footer-utility" onClick={() => navigate('/settings')}>
-            OTHER SETTINGS <span aria-hidden="true">↗</span>
-          </button>
-          <div className="footer-status" aria-live="polite">{saveFeedback || 'Changes save to this browser.'}</div>
-          <div className="footer-actions">
-            <button type="button" className="footer-utility" onClick={handleResetToDefault}>
-              RESET DEFAULT
-            </button>
-            <button
-              type="button"
-              className={`test-button ${isTesting ? 'active' : ''}`}
-              onClick={() => {
-                setEditingInput(null);
-                stopListeningForInput();
-                setTestFeedback('');
-                setIsTesting((current) => !current);
-              }}
-            >
-              {isTesting ? 'STOP TEST' : 'TEST'}
-            </button>
-            <button type="button" className="save-button" onClick={handleSave}>
-              <span aria-hidden="true">＋</span> SAVE
-            </button>
-          </div>
-        </footer>
+      <div className="ultimate-action-picker">
+        <h2>{selected ? `${physicalName[selected]} Button` : 'Select a button'}</h2>
+        <p>{selected === 'R3' ? 'C-Stick options' : 'Choose the action for this physical button.'}</p>
+        <div>{selectedActions.map((action) => <button key={action} className={actionFor(selected!) === action ? 'is-active' : ''} onClick={() => updateButton(action)}>{ACTION_LABELS[action]}</button>)}</div>
       </div>
-    </main>
-  );
+    </section>
+    {testing && <div className="ultimate-test-status" role="status">{liveInput}</div>}
+    <footer className="ultimate-controls-footer">
+      <button onClick={() => navigate('/settings')}>OTHER SETTINGS</button>
+      <span>{saved ? 'Saved to this browser' : 'Changes save to this browser profile'}</span>
+      <div><button onClick={reset}>DEFAULT</button><button className={testing ? 'is-active' : ''} onClick={() => setTesting(!testing)}>{testing ? 'STOP TEST' : 'TEST'}</button><button className="save-button" onClick={save}>SAVE</button></div>
+    </footer>
+  </main>;
 };
 
 export default KeybindsScreen;

@@ -345,3 +345,80 @@
     width: 100%;
   }
 }
+
+.ultimate-controls {
+  gap: 12px;
+  overflow: auto;
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+.ultimate-controls button { font-weight: 600; letter-spacing: normal; text-transform: none; }
+.ultimate-controls .controls-topline { margin-bottom: 8px; }
+.ultimate-controls .controls-title-row { margin-bottom: 4px; }
+.ultimate-controls .controls-title-row h1 { font-size: clamp(1.65rem, 3vw, 2.5rem); }
+.ultimate-controls-toolbar {
+  display: flex; align-items: end; gap: 18px; width: min(1460px, 100%); margin: 0 auto;
+  padding: 10px 14px; border: 1px solid #cbd5df; border-radius: 10px; background: #ffffffb8;
+}
+.ultimate-controls-toolbar label { display: grid; gap: 5px; color: #65758a; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+.ultimate-controls-toolbar input, .ultimate-controls-toolbar select, .ultimate-settings select {
+  min-height: 34px; padding: 5px 9px; border: 1px solid #bdc9d5; border-radius: 6px; background: white; color: #172333;
+}
+.ultimate-controls-toolbar .ultimate-gamepad-status { margin-left: auto; color: #967028; font-size: 12px; }
+.ultimate-controls-toolbar .is-connected { color: #14855f; }
+.ultimate-controls-board {
+  display: grid; grid-template-columns: minmax(180px, 1fr) minmax(340px, 1.3fr) minmax(180px, 1fr);
+  align-items: center; gap: 14px; width: min(1460px, 100%); min-height: 300px; margin: 0 auto;
+  padding: 12px; border: 1px solid #cbd5df; border-radius: 12px; background: #ffffffa8;
+}
+.ultimate-callouts { display: grid; gap: 7px; }
+.ultimate-callout { display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:35px; padding:6px 10px;
+  border:1px solid #bdc8d4; border-radius:7px; background:#fff; color:#28394f; text-align:left; }
+.ultimate-callout b { display:grid; min-width:32px; min-height:24px; place-items:center; border-radius:5px; background:#e9eef4; }
+.ultimate-callout.is-selected, .ultimate-callout:hover { border-color:#1bbcd2; background:#e9fbfd; }
+.ultimate-controller-illustration { position:relative; height:260px; min-width:340px; border-radius:46% 46% 40% 40%; background:linear-gradient(165deg,#263347,#101a29); box-shadow:inset 0 5px 12px #ffffff20,0 16px 24px #18283c30; }
+.ultimate-controller-illustration.gamecube { border-radius:48% 48% 32% 32%; background:linear-gradient(160deg,#4b6479,#243447); }
+.ultimate-controller-illustration.joycon-sideways { height:190px; min-width:400px; border-radius:38px; }
+.ultimate-physical-button { position:absolute; display:grid; min-width:42px; min-height:42px; place-items:center; border:2px solid #9eacbd; border-radius:50%; background:#dfe7ef; color:#172333; text-transform:none; }
+.ultimate-physical-button small { display:none; }
+.ultimate-physical-button.is-selected { outline:3px solid #1bbcd2; outline-offset:2px; background:#fff; }
+.button-a { right:25%; top:38%; }.button-b { right:38%; top:52%; }.button-x { right:38%; top:24%; }.button-y { right:51%; top:38%; }
+.button-l,.button-sl { left:10%; top:5%; }.button-zl { left:28%; top:5%; }
+.button-r,.button-sr { right:10%; top:5%; }.button-zr { right:28%; top:5%; }
+.button-z { right:9%; top:26%; }
+.button-r3 { right:14%; bottom:20%; }.button-l3 { left:17%; bottom:20%; }
+.button-plus,.button-minus { left:44%; top:43%; min-width:32px; min-height:26px; border-radius:6px; }
+.ultimate-dpad { position:absolute; left:27%; top:40%; width:72px; height:72px; }
+.ultimate-dpad .ultimate-physical-button { min-width:25px; min-height:25px; font-size:12px; }
+.dpad-up { left:24px; top:0; }.dpad-down { left:24px; bottom:0; }.dpad-left { left:0; top:24px; }.dpad-right { right:0; top:24px; }
+.controller-fixed { position:absolute; left:13%; bottom:14%; color:#e4ebf3; font-size:8px; text-align:center; }
+.controller-center-mark { position:absolute; left:47%; top:56%; color:#9daabd; font-size:10px; font-weight:800; }
+.start-fixed { left:auto; right:4%; bottom:4%; }.start-fixed small { display:block; }
+.ultimate-keyboard { min-height:240px; display:grid; align-content:center; gap:16px; }
+.ultimate-keyboard p { text-align:center; font-weight:800; color:#506178; }
+.ultimate-keyboard div { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; }
+.ultimate-keyboard button { min-height:42px; border:1px solid #bdc8d4; border-radius:6px; background:#fff; }
+.ultimate-keyboard button.is-selected { border-color:#1bbcd2; background:#e9fbfd; }
+.ultimate-keyboard .keyboard-fixed { display:grid; min-height:42px; place-items:center; border:1px dashed #aebdcb; border-radius:6px; background:#eef2f6; }
+.ultimate-keyboard small { display:block; color:#67768a; font-size:9px; }
+.ultimate-controls-bottom { display:grid; grid-template-columns:minmax(280px,1fr) minmax(300px,1.4fr); gap:12px; width:min(1460px,100%); margin:0 auto; }
+.ultimate-settings,.ultimate-action-picker { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:10px 14px; border:1px solid #cbd5df; border-radius:9px; background:#ffffffb8; }
+.ultimate-settings h2,.ultimate-action-picker h2 { width:100%; margin:0; color:#26374d; font-size:14px; }
+.ultimate-settings label { display:flex; align-items:center; gap:5px; font-size:12px; }
+.ultimate-settings select { min-height:28px; }
+.ultimate-action-picker p { margin:0; color:#718096; font-size:12px; }
+.ultimate-action-picker > div { display:flex; flex-wrap:wrap; gap:6px; }
+.ultimate-action-picker button { padding:6px 9px; border:1px solid #bdc8d4; border-radius:6px; background:#fff; color:#26374d; text-transform:none; }
+.ultimate-action-picker button.is-active { border-color:#18aabe; background:#dbf8fb; }
+.ultimate-test-status { width:min(1460px,100%); margin:0 auto; padding:8px 12px; border-radius:8px; background:#152337; color:#fff; }
+.ultimate-controls-footer { display:flex; justify-content:space-between; align-items:center; gap:10px; width:min(1460px,100%); margin:0 auto; }
+.ultimate-controls-footer > div { display:flex; gap:8px; }
+.ultimate-controls-footer button { padding:10px 14px; border:1px solid #aebdcb; border-radius:7px; background:#fff; color:#1d2f45; font-size:12px; }
+.ultimate-controls-footer .save-button { background:#e5b51b; border-color:#d5a50a; color:#1b2431; }
+.ultimate-controls-footer span { color:#69788a; font-size:12px; }
+@media(max-width:900px) {
+  .ultimate-controls-board { grid-template-columns:1fr; }
+  .ultimate-callouts { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .ultimate-controller-illustration { grid-row:1; }
+  .ultimate-controls-bottom { grid-template-columns:1fr; }
+}

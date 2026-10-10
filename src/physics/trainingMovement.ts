@@ -4,7 +4,6 @@ import {
   worldUnits,
 } from './units.ts';
 import type { WorldUnit, WorldUnitsPerFrame } from './units.ts';
-import { getFastInputWindowFrames } from './controllerSettings.ts';
 import type { PlayerControllerSettings } from '../types';
 import type { TrainingControlInput } from './trainingInput';
 
@@ -557,7 +556,7 @@ function startDash(
 export function stepTrainingMovement(
   state: TrainingMovementState,
   input: TrainingControlInput,
-  settings: PlayerControllerSettings,
+  _settings: PlayerControllerSettings,
 ): TrainingMovementState {
   const horizontal = Math.max(-1, Math.min(1, Number.isFinite(input.horizontal) ? input.horizontal : 0));
   const magnitude = Math.abs(horizontal);
@@ -579,8 +578,9 @@ export function stepTrainingMovement(
   const directionChanged = direction !== state.inputDirection;
   const framesInDirection = directionChanged ? 1 : state.framesInDirection + 1;
   const fullTilt = magnitude >= FULL_TILT_THRESHOLD;
-  const quickInput = input.isDigital
-    || (fullTilt && framesInDirection <= getFastInputWindowFrames(settings));
+  // Dash recognition is fixed; stick sensitivity is reserved for smash and
+  // side-special flick windows and must not alter movement.
+  const quickInput = input.isDigital || (fullTilt && framesInDirection <= 1);
   const turnaround = directionChanged
     && state.inputDirection !== 0
     && Math.abs(Number(state.velocityX)) > 0;

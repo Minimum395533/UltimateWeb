@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameState } from '../hooks/useGameState';
 import {
-  getFastInputWindowFrames,
+  getSmashFlickWindowFrames,
   normalizeControllerSettings,
 } from '../physics/controllerSettings';
 import '../styles/SettingsScreen.css';
@@ -146,26 +146,16 @@ const SettingsScreen: React.FC = () => {
           </p>
           <div className="setting-row sensitivity-setting">
             <label htmlFor="stick-sensitivity">Stick Sensitivity</label>
-            <div className="sensitivity-control">
-              <input
-                id="stick-sensitivity"
-                className="sensitivity-range"
-                type="range"
-                min="0"
-                max="100"
-                step="1"
-                value={controllerSettings.stickSensitivity}
-                onChange={(event) => updateControllerSettings({
-                  stickSensitivity: Number(event.target.value),
-                })}
-              />
-              <output htmlFor="stick-sensitivity">
-                {controllerSettings.stickSensitivity}% · {getFastInputWindowFrames(controllerSettings)} frames
-              </output>
-            </div>
+            <select id="stick-sensitivity" className="setting-input"
+              value={controllerSettings.stickSensitivity}
+              onChange={(event) => updateControllerSettings({
+                stickSensitivity: event.target.value as typeof controllerSettings.stickSensitivity,
+              })}>
+              <option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option>
+            </select>
           </div>
           <p className="controller-setting-help">
-            Higher sensitivity allows more time for a quick stick flick to register as a dash. The same setting is ready for future attack-input recognition.
+            Flick windows: forward smash {getSmashFlickWindowFrames(controllerSettings, 'forward-smash')}f · up/down smash {getSmashFlickWindowFrames(controllerSettings, 'vertical-smash')}f · side special {getSmashFlickWindowFrames(controllerSettings, 'side-special')}f. Dash, stick jump, fast fall, and platform drops are unchanged.
           </p>
           <p>Rebind every keyboard and controller input in Button Settings.</p>
           <button
