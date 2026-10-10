@@ -3,3 +3,4 @@
 - [Frame-data authoring](frame-data-authoring.md) — wiki numbers go in directly with citations; drawn shapes need chat approval; frame counts fixed per animation.
 - [Frame editor rules](frame-editor.md) — locked counts, never drop frames or drafts without confirmation, CLI-only approval export.
 - [Ultimate controls rules](ultimate-controls.md) — bind actions per physical button; sensitivity only changes smash/side-special flick windows, never dash.
+- [SmashWiki retrieval fallback](ssbwiki-retrieval.md) — if sandbox web search/fetch returns 402, try public wiki HTML via shell urllib.

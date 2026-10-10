@@ -27,12 +27,14 @@ import {
 } from '../dev/animationPreview';
 import type { AnimationClipSource, MovementAnimationPreviewFrame } from '../dev/animationPreview';
 import type { TrainingClips } from '../data/falcon/trainingClips';
-import { defaultTrainingHurtboxes, resolveHitboxCollisions } from '../physics/hitboxCollision';
+import { capsulesOverlap, defaultTrainingHurtboxes, resolveHitboxCollisions } from '../physics/hitboxCollision';
 import type { CollisionHistory, CombatantFrame } from '../physics/hitboxCollision';
 import type { AnimationClip } from '../dev/animationPreview';
 import { applyDirectionalInfluence, applyReaction, calculateHitReaction, CAPTAIN_FALCON_WEIGHT, staleQueueAfterMove, stepLaunch } from '../physics/combat';
 import type { CombatantRuntime, HitReaction } from '../physics/combat';
 import { chooseGetup } from '../physics/combat';
+import { applyShieldHit, createShieldState, dodgeIsIntangible, dodgeLandingLagFrames, dodgeTiming, dropShield, grabHoldFrames, mashGrabEscape, outOfShieldLag, stepShield } from '../physics/defense';
+import type { ShieldState } from '../physics/defense';
 import type { RecoveryState } from '../physics/combat';
 import { classifyNormalAttack, getJabFollowup, getNormalAttackData, getSmashChargeDamageMultiplier, NORMAL_ATTACK_IDS, scaleAttackHitboxes } from '../physics/normalAttacks';
 import type { NormalAttackId } from '../physics/normalAttacks';
@@ -63,13 +65,21 @@ const TrainingScreen: React.FC = () => {
   const [dummyPercent, setDummyPercent] = useState(0);
   const [comboCount, setComboCount] = useState(0);
   const [lastReaction, setLastReaction] = useState<HitReaction | null>(null);
-  const [dummyBehavior, setDummyBehavior] = useState<'stand' | 'jump' | 'move'>('stand');
+  const [dummyGrabbed, setDummyGrabbed] = useState(false);
+  const [dummyBehavior, setDummyBehavior] = useState<'stand' | 'jump' | 'move' | 'shield' | 'parry' | 'dodge' | 'roll-forward' | 'roll-back' | 'air-dodge' | 'air-dodge-directional' | 'mash'>('stand');
   const [dummyFrame, setDummyFrame] = useState(0);
   const [simSpeed, setSimSpeed] = useState(1);
   const [dummyRecovery, setDummyRecovery] = useState<RecoveryState>('airborne');
   const [getupOption, setGetupOption] = useState<'neutral' | 'roll-left' | 'roll-right' | 'attack'>('neutral');
   const dummyPercentRef = useRef(0);
-  const dummyBehaviorRef = useRef<'stand' | 'jump' | 'move'>('stand');
+  const dummyBehaviorRef = useRef<'stand' | 'jump' | 'move' | 'shield' | 'parry' | 'dodge' | 'roll-forward' | 'roll-back' | 'air-dodge' | 'air-dodge-directional' | 'mash'>('stand');
+  const dummyShieldRef = useRef<ShieldState>(createShieldState());
+  const [dummyShieldHealth, setDummyShieldHealth] = useState(50);
+  const [dummyDodgeLandingLag, setDummyDodgeLandingLag] = useState(0);
+  const dummyGrabbedRef = useRef(false);
+  const grabHoldFramesRef = useRef(0);
+  const dummyDodgeLandingLagRef = useRef(0);
+  const wasAirDodgeIntangibleRef = useRef(false);
   const dummyFrameRef = useRef(0);
   const simSpeedRef = useRef(1);
   const manualStepsRef = useRef(0);
@@ -89,7 +99,7 @@ const TrainingScreen: React.FC = () => {
   const previewPlaybackRef = useRef(INITIAL_MOVEMENT_ANIMATION_PREVIEW);
   const activeAnimationRef = useRef<MovementAnimationPreviewFrame | null>(null);
   const attackTestRef = useRef<{ clip: AnimationClip; frameIndex: number; moveId: string; damageMultiplier: number } | null>(null);
-  const previousAttackActionsRef = useRef({ attack: false, tilt: false, smash: false, rightStick: false });
+  const previousAttackActionsRef = useRef({ attack: false, tilt: false, smash: false, rightStick: false, grab: false });
   const previousStickMagnitudeRef = useRef(0);
   const stickFlickAgeRef = useRef(99);
   const bufferedAttackRef = useRef<{ id: NormalAttackId; expires: number } | null>(null);
@@ -238,6 +248,7 @@ const TrainingScreen: React.FC = () => {
           const actions = previousAttackActionsRef.current;
           const rightStickHeld = Math.abs(input.rightStickX) > 0.65 || Math.abs(input.rightStickY) > 0.65;
           const rightStickPressed = rightStickHeld && !actions.rightStick;
+          const grabPressed = input.actions.grab && !actions.grab;
           const magnitude = Math.max(Math.abs(input.horizontal), Math.abs(input.vertical));
           if (magnitude > 0.25) {
             stickFlickAgeRef.current = previousStickMagnitudeRef.current <= 0.25
@@ -267,7 +278,7 @@ const TrainingScreen: React.FC = () => {
               stickMode: controllerSettingsRef.current.rightStickMode ?? 'smash', flick: false,
             })
             : command;
-          previousAttackActionsRef.current = { attack: input.actions.attack, tilt: input.actions.tilt, smash: input.actions.smash, rightStick: rightStickHeld };
+          previousAttackActionsRef.current = { attack: input.actions.attack, tilt: input.actions.tilt, smash: input.actions.smash, rightStick: rightStickHeld, grab: input.actions.grab };
           previousStickMagnitudeRef.current = magnitude;
           const buffered = bufferedAttackRef.current;
           if (buffered && buffered.expires <= 0) bufferedAttackRef.current = null;
@@ -316,6 +327,19 @@ const TrainingScreen: React.FC = () => {
               setJabTestActive(true);
             });
           }
+          if (grabPressed && !dummyGrabbedRef.current && !attackTestRef.current) {
+            void import('../data/falcon/trainingClips').then(({ resolveAnimationClip }) => {
+              const grabMove = movementRef.current.mode === 'run' || movementRef.current.mode === 'initial-dash'
+                ? 'dash-grab'
+                : movementRef.current.mode === 'turnaround-dash' ? 'pivot-grab' : 'grab';
+              const clip = resolveAnimationClip(grabMove);
+              if (!clip) return;
+              collisionHistoryRef.current.clear();
+              attackTestRef.current = { clip, frameIndex: -1, moveId: grabMove, damageMultiplier: 1 };
+              setHitReadout(`${clip.animationId} · SmashWiki grabbox timing`);
+              setJabTestActive(true);
+            });
+          }
           const playerInHitlag = playerHitlagFramesRef.current > 0;
           if (playerInHitlag) playerHitlagFramesRef.current -= 1;
           else if ((!attackTestRef.current || !movementRef.current.isGrounded) && landingLagRef.current === 0) {
@@ -338,6 +362,25 @@ const TrainingScreen: React.FC = () => {
           }
           dummyFrameRef.current += 1;
           setDummyFrame(dummyFrameRef.current);
+          if (dummyGrabbedRef.current) {
+            const mash = dummyBehaviorRef.current === 'mash' || input.actions.attack || input.actions.jump;
+            grabHoldFramesRef.current = mash
+              ? mashGrabEscape(grabHoldFramesRef.current, dummyBehaviorRef.current === 'mash' ? 3 : 1)
+              : Math.max(0, grabHoldFramesRef.current - 1);
+            if (grabHoldFramesRef.current === 0) {
+              dummyGrabbedRef.current = false;
+              setDummyGrabbed(false);
+              setHitReadout('Grab escaped');
+            }
+          }
+          const phase = dummyFrameRef.current;
+          const behavior = dummyBehaviorRef.current;
+          const parryHolding = behavior === 'parry' && phase % 60 < 9;
+          let shield = dummyShieldRef.current;
+          if (shield.heldFrames > 0 && behavior !== 'shield' && !parryHolding) shield = dropShield(shield);
+          shield = stepShield(shield, behavior === 'shield' || parryHolding);
+          dummyShieldRef.current = shield;
+          setDummyShieldHealth(shield.health);
           if (manualStepsRef.current > 0) {
             manualStepsRef.current -= 1;
             if (accumulatedMilliseconds >= TRAINING_STEP_MILLISECONDS) accumulatedMilliseconds -= TRAINING_STEP_MILLISECONDS;
@@ -426,20 +469,71 @@ const TrainingScreen: React.FC = () => {
                 : dummyBehaviorRef.current === 'move'
                   ? { x: 16 + Math.sin(phase * Math.PI / 60) * 12, y: 0, z: 0 }
                   : { x: 16, y: 0, z: 0 };
-              const targetPosition = dummyLaunchedRef.current
+              const dodgeIds: Record<string, string> = {
+                dodge: 'spot-dodge', 'roll-forward': 'roll-forward', 'roll-back': 'roll-back',
+                'air-dodge': 'air-dodge', 'air-dodge-directional': 'air-dodge-directional',
+              };
+              const dodgeId = dodgeIds[behavior];
+              const timing = dodgeId ? dodgeTiming(dodgeId) : null;
+              const dodgeFrame = timing ? phase % timing.totalFrames + 1 : 0;
+              const dodgeStaleCount = timing ? Math.floor(phase / (timing.totalFrames + 60)) : 0;
+              const dodging = Boolean(dodgeId && dodgeIsIntangible(dodgeId, dodgeFrame, dodgeStaleCount));
+              const isAirDodge = behavior === 'air-dodge' || behavior === 'air-dodge-directional';
+              if (isAirDodge && wasAirDodgeIntangibleRef.current && !dodging) {
+                dummyDodgeLandingLagRef.current = dodgeLandingLagFrames(dodgeId ?? '');
+              } else if (dummyDodgeLandingLagRef.current > 0) {
+                dummyDodgeLandingLagRef.current -= 1;
+              }
+              wasAirDodgeIntangibleRef.current = isAirDodge && dodging;
+              setDummyDodgeLandingLag(dummyDodgeLandingLagRef.current);
+              if (behavior === 'roll-forward' || behavior === 'roll-back') {
+                const progress = (dodgeFrame || 1) / (timing?.totalFrames ?? 30);
+                behaviorPosition.x = 16 + (behavior === 'roll-forward' ? 1 : -1) * progress * 10;
+              }
+              if (behavior === 'air-dodge' || behavior === 'air-dodge-directional') {
+                behaviorPosition.y = dodging ? 8 : 0;
+              }
+              const targetPosition = dummyGrabbedRef.current
+                ? { x: movementRef.current.positionX + movementRef.current.facingDirection * 2, y: movementRef.current.positionY, z: 0 }
+                : dummyLaunchedRef.current
                 ? { x: dummyRuntimeRef.current.positionX, y: dummyRuntimeRef.current.positionY, z: 0 }
                 : behaviorPosition;
               const target: CombatantFrame = {
                 id: 'training-target', moveId: 'stationary', frame: nextFrame + 1,
                 position: targetPosition, facing: -1, grounded: targetPosition.y === 0,
                 hitboxes: [], hurtboxes: defaultTrainingHurtboxes().map((box) => ({
-                  ...box, state: dummyInvincibleFramesRef.current > 0 ? 'invincible' : box.state,
+                  ...box, state: dummyInvincibleFramesRef.current > 0 ? 'invincible' : dodging ? 'intangible' : box.state,
                 })),
               };
+              const grabMove = ['grab', 'dash-grab', 'pivot-grab'].includes(test.moveId);
+              const grabHit = grabMove && !dodging && dummyInvincibleFramesRef.current <= 0
+                && frame.grabboxes.some((grabbox) =>
+                target.hurtboxes.some((hurtbox) => capsulesOverlap(grabbox, attacker, hurtbox, target)),
+              );
+              if (grabHit && !dummyGrabbedRef.current) {
+                dummyGrabbedRef.current = true;
+                grabHoldFramesRef.current = grabHoldFrames(dummyPercentRef.current);
+                setDummyGrabbed(true);
+                setHitReadout(`Grabbed · ${grabHoldFramesRef.current}f to escape · mash to break free`);
+              }
               const collision = resolveHitboxCollisions([attacker, target], collisionHistoryRef.current);
               const hit = collision.hits[0];
               if (hit) {
                 if (hit.effect === 'hit') {
+                  if (behavior === 'shield' || behavior === 'parry') {
+                    const blocked = applyShieldHit(shield, hit.hitbox);
+                    dummyShieldRef.current = blocked.state;
+                    setDummyShieldHealth(blocked.state.health);
+                    movementRef.current = {
+                      ...movementRef.current,
+                      positionX: (Number(movementRef.current.positionX) - movementRef.current.facingDirection * blocked.pushback) as typeof movementRef.current.positionX,
+                    };
+                    setHitReadout(blocked.parried
+                      ? 'Perfect shield · no shield damage or stun'
+                      : blocked.broke
+                        ? 'Shield break · 37.5f dizzy'
+                        : `Shielded · −${blocked.shieldDamage.toFixed(1)} shield · ${blocked.shieldstunFrames}f stun`);
+                  } else {
                   const reaction = calculateHitReaction(hit.hitbox, {
                     percent: dummyPercentRef.current,
                     weight: CAPTAIN_FALCON_WEIGHT,
@@ -458,11 +552,17 @@ const TrainingScreen: React.FC = () => {
                   });
                   playerHitlagFramesRef.current = reaction.hitlagFrames;
                   dummyLaunchedRef.current = true;
+                  if (dummyGrabbedRef.current && test.moveId !== 'pummel') {
+                    dummyGrabbedRef.current = false;
+                    grabHoldFramesRef.current = 0;
+                    setDummyGrabbed(false);
+                  }
                   setDummyPercent(dummyPercentRef.current);
                   setComboCount((count) => count + 1);
                   setLastReaction(reaction);
                   lastReactionRef.current = reaction;
                   setHitReadout(`Hit · ${reaction.damage.toFixed(1)}% · ${reaction.knockback.toFixed(0)} KB · ${reaction.hitstunFrames}f stun`);
+                  }
                 } else setHitReadout(`Contact · target invincible · hitbox ${hit.hitboxId}`);
               }
             }
@@ -595,6 +695,8 @@ const TrainingScreen: React.FC = () => {
       : { x: 16, y: 0 };
   const dummyPosition = dummyLaunchedRef.current
     ? { x: dummyRuntimeRef.current.positionX, y: dummyRuntimeRef.current.positionY }
+    : dummyGrabbed
+      ? { x: Number(movement.positionX) + movement.facingDirection * 2, y: Number(movement.positionY) }
     : behaviorPosition;
   const startJabTest = (attackId: NormalAttackId = selectedAttack) => {
     void import('../data/falcon/trainingClips').then(({ resolveAnimationClip }) => {
@@ -604,6 +706,16 @@ const TrainingScreen: React.FC = () => {
       attackTestRef.current = { clip, frameIndex: -1, moveId: clip.animationId, damageMultiplier: 1 };
       const data = getNormalAttackData(attackId);
       setHitReadout(`${data.label} · ${clip.source === 'default' ? 'DEFAULT SHAPES · NOT APPROVED' : clip.source === 'approved' ? 'APPROVED DATA' : 'DRAFT'} · target at 16 u`);
+      setJabTestActive(true);
+    });
+  };
+  const startDefenseClip = (animationId: string, oosAction?: 'jump' | 'upSmash' | 'upSpecial') => {
+    void import('../data/falcon/trainingClips').then(({ resolveAnimationClip }) => {
+      const clip = resolveAnimationClip(animationId);
+      if (!clip) return;
+      collisionHistoryRef.current.clear();
+      attackTestRef.current = { clip, frameIndex: -1, moveId: clip.animationId, damageMultiplier: 1 };
+      setHitReadout(`${clip.animationId} · ${oosAction ? `${outOfShieldLag(oosAction)}f out of shield` : 'source-timed animation'}`);
       setJabTestActive(true);
     });
   };
@@ -668,10 +780,27 @@ const TrainingScreen: React.FC = () => {
                 dummyRuntimeRef.current = { ...dummyRuntimeRef.current, positionX: 16, positionY: 0, velocityX: 0, velocityY: 0, hitlagFrames: 0, hitstunFrames: 0, ko: false };
               }}>Recover</button>}
               <label>Behavior <select value={dummyBehavior} onChange={(event) => {
-                const value = event.target.value as 'stand' | 'jump' | 'move';
+                const value = event.target.value as typeof dummyBehavior;
                 dummyBehaviorRef.current = value;
                 setDummyBehavior(value);
-              }}><option value="stand">Stand</option><option value="jump">Jump</option><option value="move">Move</option></select></label>
+              }}><option value="stand">Stand</option><option value="jump">Jump</option><option value="move">Move</option><option value="shield">Shield</option><option value="parry">Parry practice</option><option value="dodge">Spot dodge</option><option value="roll-forward">Forward roll</option><option value="roll-back">Back roll</option><option value="air-dodge">Neutral air dodge</option><option value="air-dodge-directional">Directional air dodge</option><option value="mash">Mash escape</option></select></label>
+              <span>Shield {dummyShieldHealth.toFixed(1)} / 50</span>
+              {dummyDodgeLandingLag > 0 && <span>Air-dodge landing lag {dummyDodgeLandingLag}f</span>}
+              {dummyGrabbed && <span>Grab hold {grabHoldFramesRef.current}f</span>}
+              {dummyGrabbed && <>
+                <button type="button" onClick={() => startDefenseClip('pummel')}>Pummel</button>
+                <button type="button" onClick={() => startDefenseClip('fthrow')}>F-throw</button>
+                <button type="button" onClick={() => startDefenseClip('bthrow')}>B-throw</button>
+                <button type="button" onClick={() => startDefenseClip('uthrow')}>Up throw</button>
+                <button type="button" onClick={() => startDefenseClip('dthrow')}>Down throw</button>
+                <button type="button" onClick={() => { dummyGrabbedRef.current = false; setDummyGrabbed(false); setHitReadout('Grab released'); }}>Release</button>
+              </>}
+              <div className="training-defense-controls" aria-label="Out of shield practice">
+                <span>Out of shield</span>
+                <button type="button" onClick={() => startDefenseClip('jump-squat', 'jump')}>Jump · 3f</button>
+                <button type="button" onClick={() => startDefenseClip('usmash', 'upSmash')}>Up smash · 0f</button>
+                <button type="button" onClick={() => startDefenseClip('falcon-dive', 'upSpecial')}>Up special · 0f</button>
+              </div>
               <label>Speed <select value={simSpeed} onChange={(event) => {
                 const value = Number(event.target.value);
                 simSpeedRef.current = value;
@@ -681,6 +810,14 @@ const TrainingScreen: React.FC = () => {
               <button type="button" onClick={() => {
                 dummyPercentRef.current = 0;
                 dummyRuntimeRef.current = { percent: 0, positionX: 16, positionY: 0, velocityX: 0, velocityY: 0, hitlagFrames: 0, hitstunFrames: 0, ko: false };
+                dummyShieldRef.current = createShieldState();
+                dummyGrabbedRef.current = false;
+                grabHoldFramesRef.current = 0;
+                setDummyShieldHealth(50);
+                setDummyGrabbed(false);
+                dummyDodgeLandingLagRef.current = 0;
+                setDummyDodgeLandingLag(0);
+                wasAirDodgeIntangibleRef.current = false;
                 dummyLaunchedRef.current = false;
                 dummyInvincibleFramesRef.current = 0;
                 staleQueueRef.current = [];

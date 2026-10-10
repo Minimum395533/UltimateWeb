@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "node --experimental-strip-types --test tests/physics/units.test.mjs tests/physics/trainingMovement.test.mjs tests/physics/normalAttacks.test.mjs tests/dev/frameDataModel.test.mjs tests/dev/editorOps.test.mjs tests/dev/animationCatalog.test.mjs tests/dev/animationPreview.test.mjs tests/dev/webpAnimation.test.mjs",
+    "test": "node --experimental-strip-types --test tests/physics/units.test.mjs tests/physics/trainingMovement.test.mjs tests/physics/normalAttacks.test.mjs tests/physics/defense.test.mjs tests/dev/frameDataModel.test.mjs tests/dev/editorOps.test.mjs tests/dev/animationCatalog.test.mjs tests/dev/animationPreview.test.mjs tests/dev/webpAnimation.test.mjs",
     "test:frame-data-integration": "FRAME_DATA_INTEGRATION_TEST=1 node --experimental-strip-types --test tests/dev/frameDataApi.integration.test.mjs tests/dev/frameDataMigrations.integration.test.mjs",
     "test:frame-data-production": "npm run build && node --test tests/dev/frameDataProductionAccess.test.mjs",
     "approve-animations": "node --experimental-strip-types scripts/approve-animations.ts",
