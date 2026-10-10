@@ -131,8 +131,12 @@ export function readTrainingControlInput(
   newlyPressedKeys: ReadonlySet<string> = new Set(),
   buttonSettings?: PlayerButtonSettings,
   controllerType: ControllerType = 'pro',
+  gamepadIndex?: number,
+  keyboardActionKeyMap: Readonly<Record<string, string>> = {},
 ): TrainingControlInput {
-  const gamepad = gamepads.find((pad): pad is GamepadSnapshot => pad !== null) ?? null;
+  const gamepad = gamepadIndex === undefined
+    ? gamepads.find((pad): pad is GamepadSnapshot => pad !== null) ?? null
+    : gamepads[gamepadIndex] ?? null;
   const settings = normalizeControllerSettings(controllerSettings);
 
   const leftKeyboard = readBinding(getBinding(bindings, 'keyboard', 'left'), pressedKeys, null);
@@ -159,7 +163,7 @@ export function readTrainingControlInput(
     for (const [physical, assigned] of Object.entries(actionMap)) {
       if (assigned !== action) continue;
       if (device === 'keyboard' && controllerType === 'keyboard') {
-        const code = keyCodeForPhysical[physical];
+        const code = keyboardActionKeyMap[physical] ?? keyCodeForPhysical[physical];
         if (code && pressedKeys.has(code)) return true;
       }
       if (device === 'gamepad' && controllerType !== 'keyboard') {

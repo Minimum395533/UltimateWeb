@@ -133,6 +133,36 @@
   animation: buttonPulse 1.5s ease-in-out infinite;
 }
 
+.local-rules {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin: 24px auto 0;
+  padding: 16px 20px;
+  color: var(--text-primary);
+  background: rgba(15, 25, 42, 0.76);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+}
+
+.local-rules label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #e0e9f4;
+  font-weight: 700;
+}
+
+.local-rules input,
+.local-rules select {
+  min-width: 120px;
+  padding: 9px 11px;
+  color: #f5f7fa;
+  background: #121e30;
+  border: 1px solid #51627a;
+  border-radius: 7px;
+}
+
 @keyframes buttonPulse {
   0%, 100% { 
     box-shadow: 0 0 20px var(--glow-color);
@@ -169,4 +199,6 @@
     width: 100%;
     max-width: 400px;
   }
+
+  .local-rules { flex-wrap: wrap; }
 }

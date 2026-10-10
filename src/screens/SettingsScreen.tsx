@@ -80,7 +80,7 @@ const SettingsScreen: React.FC = () => {
             <label>Time Limit (seconds)</label>
             <input
               type="number"
-              value={state.gameSettings.timeLimit || 300}
+              value={state.gameSettings.timeLimit ?? 420}
               onChange={handleTimeLimitChange}
               min="0"
               max="999"

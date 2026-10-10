@@ -50,7 +50,7 @@ const initialPlayers: PlayerProfile[] = [
 
 const initialGameSettings: GameSettings = {
   stockCount: 3,
-  timeLimit: 300,
+  timeLimit: 420,
   damageRatio: 1.0,
 };
 

@@ -15,11 +15,12 @@ const LocalPlayScreen: React.FC = () => {
     togglePlayerReady,
     canStartLocalGame,
     allPlayersReady,
+    updateGameSettings,
   } = useGameState();
 
   const handleStartGame = () => {
     if (canStartLocalGame && allPlayersReady) {
-      alert('Game would start now! (Gameplay not yet implemented)');
+      navigate('/match', { state: { players: state.players, gameSettings: state.gameSettings } });
     }
   };
 
@@ -59,6 +60,21 @@ const LocalPlayScreen: React.FC = () => {
           />
         ))}
       </div>
+
+      <section className="local-rules" aria-label="Match rules">
+        <label>Stocks
+          <input type="number" min="1" max="9" value={state.gameSettings.stockCount ?? 3}
+            onChange={(event) => updateGameSettings({ stockCount: Math.max(1, Math.min(9, Number(event.target.value) || 3)) })} />
+        </label>
+        <label>Time limit
+          <select value={state.gameSettings.timeLimit ?? 420}
+            onChange={(event) => updateGameSettings({ timeLimit: Number(event.target.value) })}>
+            <option value={0}>No limit</option><option value={180}>3 minutes</option>
+            <option value={300}>5 minutes</option><option value={420}>7 minutes</option>
+            <option value={600}>10 minutes</option>
+          </select>
+        </label>
+      </section>
 
       {canStartLocalGame && (
         <div className="start-button-container">
