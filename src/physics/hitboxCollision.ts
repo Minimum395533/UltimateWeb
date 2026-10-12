@@ -19,6 +19,13 @@ export interface CollisionResult {
 
 export interface CollisionHistory { lastHitFrame: number; rehitRate: number }
 
+/** Contacts can still be reported for invincibility and inert detectors, but neither may deal damage. */
+export function collisionCanDealDamage(
+  hit: CollisionResult['hits'][number],
+): boolean {
+  return hit.effect === 'hit' && hit.hitbox.effect.toLowerCase() !== 'inert';
+}
+
 type Point = [number, number, number];
 const worldPoint = (position: FramePoint3, facing: -1 | 1, local: FramePoint3): Point =>
   [position.x + local.x * facing, position.y + local.y, position.z + local.z];

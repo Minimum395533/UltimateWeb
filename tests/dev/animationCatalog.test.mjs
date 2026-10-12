@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ANIMATION_CATALOG, getCatalogEntry, getEffectiveFrameCount } from '../../src/data/falcon/animationCatalog.ts';
-import { getTimingMarkers, parseTimingFrames, seedAnimationFrames } from '../../src/data/falcon/seedAnimation.ts';
+import { getSeedHitboxRows, getTimingMarkers, parseTimingFrames, seedAnimationFrames } from '../../src/data/falcon/seedAnimation.ts';
+import { WIKI_MOVE_DATA } from '../../src/data/falcon/wikiMoveData.ts';
 import { buildTrainingClips, resolveAnimationClip } from '../../src/data/falcon/trainingClips.ts';
 import { validateAnimationFrames } from '../../src/dev/frameDataModel.ts';
 import { MOVEMENT_STATES } from '../../src/types/frameData.ts';
@@ -46,6 +47,29 @@ test('wiki hitboxes appear only on their active frames', () => {
   }
   const markers = getTimingMarkers(jab);
   assert.ok(markers.length > 0);
+});
+
+test('every catalog hitbox window resolves to sourced wiki rows and stays inside its animation', () => {
+  for (const entry of ANIMATION_CATALOG) {
+    const expectedFrames = new Set();
+    for (const seed of entry.hitboxes ?? []) {
+      const rows = getSeedHitboxRows(seed);
+      assert.ok(rows.length > 0, `${entry.id}: missing ${seed.page}/${seed.section}/${seed.group}`);
+      assert.ok(WIKI_MOVE_DATA[seed.page].url.includes('ssbwiki.com'), `${entry.id}: missing source URL`);
+      for (const [start, end] of seed.frames) {
+        assert.ok(start >= 1 && end >= start && end <= entry.frameCount, `${entry.id}: invalid active window ${start}-${end}`);
+        for (let frame = start; frame <= end; frame += 1) expectedFrames.add(frame);
+      }
+    }
+    if (!(entry.hitboxes?.length)) continue;
+    const frames = seedAnimationFrames(entry);
+    const actualFrames = new Set(frames.filter((frame) => frame.hitboxes.length).map((frame) => frame.frameNumber));
+    assert.deepEqual([...actualFrames].sort((a, b) => a - b), [...expectedFrames].sort((a, b) => a - b), entry.id);
+    for (const hitbox of frames.flatMap((frame) => frame.hitboxes)) {
+      assert.equal(hitbox.source.kind, 'smashwiki', `${entry.id}: hitbox must retain source provenance`);
+      assert.equal(hitbox.source.url, WIKI_MOVE_DATA[hitbox.source.page].url, `${entry.id}: source URL mismatch`);
+    }
+  }
 });
 
 test('grab animations seed grab boxes and intangibility is seeded where listed', () => {

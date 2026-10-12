@@ -15,7 +15,7 @@ import {
   applyReaction, calculateHitReaction, CAPTAIN_FALCON_WEIGHT, stepLaunch, staleQueueAfterMove,
 } from '../physics/combat';
 import type { CombatantRuntime } from '../physics/combat';
-import { defaultTrainingHurtboxes, resolveHitboxCollisions } from '../physics/hitboxCollision';
+import { collisionCanDealDamage, defaultTrainingHurtboxes, resolveHitboxCollisions } from '../physics/hitboxCollision';
 import type { CollisionHistory, CombatantFrame } from '../physics/hitboxCollision';
 import { classifyNormalAttack } from '../physics/normalAttacks';
 import { normalizeControllerSettings } from '../physics/controllerSettings';
@@ -249,7 +249,7 @@ const MatchScreen: React.FC = () => {
             const targetIndex = Number(hit.targetId.slice(1));
             const attacker = fightersRef.current[attackerIndex];
             const target = fightersRef.current[targetIndex];
-            if (target.invulnerableFrames > 0) continue;
+            if (target.invulnerableFrames > 0 || !collisionCanDealDamage(hit)) continue;
             const ratio = Math.max(0.1, Math.min(3, settings.damageRatio ?? 1));
             const reaction = calculateHitReaction({ ...hit.hitbox, damage: hit.hitbox.damage * ratio }, {
               percent: target.percent, weight: CAPTAIN_FALCON_WEIGHT, staleQueue: target.staleQueue,

@@ -19,7 +19,7 @@ import {
   stepTrainingMovement,
 } from '../../src/physics/trainingMovement.ts';
 import { unitsPerFrame, worldUnits } from '../../src/physics/units.ts';
-import { capsulesOverlap, defaultTrainingHurtboxes, resolveHitboxCollisions } from '../../src/physics/hitboxCollision.ts';
+import { capsulesOverlap, collisionCanDealDamage, defaultTrainingHurtboxes, resolveHitboxCollisions } from '../../src/physics/hitboxCollision.ts';
 import { resolveAnimationClip } from '../../src/data/falcon/trainingClips.ts';
 import {
   calculateHitReaction, applyDirectionalInfluence, applyReaction, stepLaunch,
@@ -83,6 +83,21 @@ test('intangible hurts are ignored and invincible contacts are reported without 
   assert.equal(resolveHitboxCollisions([attack, combatant('target', 1, { hurtboxes: [testCapsule('body', 4, 'intangible')] })], history).hits.length, 0);
   const hit = resolveHitboxCollisions([attack, combatant('target', 1, { hurtboxes: [testCapsule('body', 4, 'invincible')] })], history).hits[0];
   assert.equal(hit.effect, 'invincible');
+  assert.equal(collisionCanDealDamage(hit), false);
+});
+
+test('inert detector contacts never apply hit damage', () => {
+  const result = resolveHitboxCollisions([
+    combatant('attacker', 1, { hitboxes: [testHitbox(1, 0, { effect: 'Inert' })] }),
+    combatant('target', 1, { hurtboxes: [testCapsule('body', 4)] }),
+  ], new Map());
+  assert.equal(result.hits.length, 1, 'the contact remains available to special-move detection');
+  assert.equal(collisionCanDealDamage(result.hits[0]), false);
+  const ordinary = resolveHitboxCollisions([
+    combatant('attacker', 1, { hitboxes: [testHitbox(1, 0, { effect: 'Normal' })] }),
+    combatant('target', 1, { hurtboxes: [testCapsule('body', 4)] }),
+  ], new Map()).hits[0];
+  assert.equal(collisionCanDealDamage(ordinary), true);
 });
 
 test('ground and air targeting filters, and clank versus trade outcomes, are reported', () => {
