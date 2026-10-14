@@ -1,0 +1,44 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "oA_rAdFCLVb3wpeWcWOlw"
+uri = "file://generated-artifacts/captain_falcon_params.html"
+type = "html"
+title = "Captain Falcon PRC parameters"
+description = "Searchable table of all 369 Captain Falcon fields with exact values, types, and raw Hash40 keys."
+logical_id = "5b23be7f-38e1-4232-bf59-9c0571d3dbfe"
+content_hash = "sha256:27d6f5f5a341ac633337ecc7c342d6897c83eb55eaa934fe4e9aad6dfa634ea5"
+size = 45065
+mtime_ms = 1792003881706
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:d33f8eca-fd91-4f2f-b6ca-c84bfb722975/5b23be7f-38e1-4232-bf59-9c0571d3dbfe/ded63ff4-02c1-4b27-be9b-b8f6262be952"
+storage_version_token = "1792003928661263"
+content_type = "text/html"
+
+[[outputs]]
+id = "zwbOyaE-NycEzGzYJ8JZj"
+uri = "file://generated-artifacts/captain_falcon_params.csv"
+type = "table"
+title = "Captain Falcon parameters (CSV)"
+description = "All 369 Captain Falcon parameter fields with exact values, types, labels, and Hash40 keys."
+logical_id = "00b8a644-6f89-4227-8636-0bac1f41eebd"
+content_hash = "sha256:4529a87048b7a23c937a215a045c607943065f3f25a0b9a87db1b1055f04e46a"
+size = 42440
+mtime_ms = 1792003828221
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:d33f8eca-fd91-4f2f-b6ca-c84bfb722975/00b8a644-6f89-4227-8636-0bac1f41eebd/1d1986e0-8dc2-4cd0-8b0a-f87bf9bbc1ca"
+storage_version_token = "1792003929363106"
+content_type = "text/csv"
+
+[[outputs]]
+id = "OzNNTKv05W1wATu1QUVf-"
+uri = "file://generated-artifacts/fighter_param_all.csv"
+type = "table"
+title = "All fighter parameters (CSV)"
+description = "Full decoded table: 94 fighters × 369 fields, preserving types, exact values, and field hashes."
+logical_id = "684dca4c-9a09-4177-a38f-3f92bd9d83c9"
+content_hash = "sha256:541d631b1a7b235ef437a8f0db1da50c027729c871fedf3a547ba18140927892"
+size = 3942079
+mtime_ms = 1792003828221
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:d33f8eca-fd91-4f2f-b6ca-c84bfb722975/684dca4c-9a09-4177-a38f-3f92bd9d83c9/e34840a3-31f6-454e-becc-122d5ad4e5e4"
+storage_version_token = "1792003930257607"
+content_type = "text/csv"
