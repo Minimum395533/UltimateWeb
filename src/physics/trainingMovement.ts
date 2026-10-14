@@ -49,6 +49,12 @@ export const DASH_CONTINUE_THRESHOLD = 0.75;
 
 export const CAPTAIN_FALCON_MOVEMENT = {
   walkSpeed: unitsPerFrame(0.987),
+  walkAccelerationBase: unitsPerFrameSquared(0.105),
+  walkAccelerationScale: unitsPerFrameSquared(0.158),
+  slowWalkSpeedMultiplier: 0.2,
+  middleWalkRatio: 0.5,
+  fastWalkRatio: 0.75,
+  groundBrake: unitsPerFrameSquared(0.105),
   runSpeed: unitsPerFrame(2.552),
   initialDashSpeed: unitsPerFrame(1.98),
   dashFrames: 15,
@@ -59,6 +65,15 @@ export const CAPTAIN_FALCON_MOVEMENT = {
   gravity: unitsPerFrameSquared(0.12),
   fallSpeed: unitsPerFrame(1.865),
   fastFallSpeed: unitsPerFrame(2.984),
+  jumpSpeedX: unitsPerFrame(0.9),
+  jumpSpeedXMultiplier: 0.75,
+  jumpSpeedXMax: unitsPerFrame(2.1),
+  airJumpSpeedXMultiplier: 0.9,
+  airAccelerationXScale: unitsPerFrameSquared(0.065),
+  airAccelerationXBase: unitsPerFrameSquared(0.01),
+  airSpeedXStable: unitsPerFrame(1.218),
+  airBrakeX: unitsPerFrameSquared(0.0075),
+  airGroundSpeedBrake: unitsPerFrameSquared(0.0225),
   regularDashAccelerationDelayFrames: 1,
   turnaroundDashAccelerationDelayFrames: 3,
   jumpSquatFrames: 3,
@@ -273,6 +288,21 @@ function launchVelocityForHeight(height: number, gravity: number): number {
   throw new RangeError('Jump height exceeds the supported frame range');
 }
 
+function applyJumpHorizontalSpeed(
+  state: TrainingMovementState,
+  input: TrainingControlInput,
+  aerial: boolean,
+): WorldUnitsPerFrame {
+  const horizontal = Math.max(-1, Math.min(1, Number(input.horizontal) || 0));
+  const momentumMultiplier = aerial
+    ? CAPTAIN_FALCON_MOVEMENT.airJumpSpeedXMultiplier
+    : CAPTAIN_FALCON_MOVEMENT.jumpSpeedXMultiplier;
+  const speed = Number(state.velocityX) * momentumMultiplier
+    + (aerial ? 0 : horizontal * Number(CAPTAIN_FALCON_MOVEMENT.jumpSpeedX));
+  const speedLimit = Number(CAPTAIN_FALCON_MOVEMENT.jumpSpeedXMax);
+  return unitsPerFrame(Math.max(-speedLimit, Math.min(speedLimit, speed)));
+}
+
 const FULL_HOP_INITIAL_PHASE = (() => {
   const initialHeight = Number(CAPTAIN_FALCON_MOVEMENT.jumpInitialHeight);
   const remainingHeight =
@@ -344,6 +374,7 @@ function advanceVerticalMovement(
         );
       return {
         ...squatState,
+        velocityX: applyJumpHorizontalSpeed(squatState, input, false),
         velocityY: unitsPerFrame(launchVelocity),
         isGrounded: false,
         jumpsUsed: 1,
@@ -398,6 +429,7 @@ function advanceVerticalMovement(
   if (jumpPressed && airJumpsUsed < CAPTAIN_FALCON_MOVEMENT.maxAirJumps) {
     return {
       ...airborneState,
+      velocityX: applyJumpHorizontalSpeed(airborneState, input, true),
       velocityY: unitsPerFrame(launchVelocityForHeight(
         Number(CAPTAIN_FALCON_MOVEMENT.airJumpHeight),
         Number(CAPTAIN_FALCON_MOVEMENT.gravity),
@@ -520,12 +552,16 @@ function advanceVerticalMovement(
 
 function walkBandForMagnitude(magnitude: number): WalkBand {
   if (magnitude <= 0) return 0;
-  if (magnitude < 1 / 3) return 1;
-  if (magnitude < 2 / 3) return 2;
+  if (magnitude < CAPTAIN_FALCON_MOVEMENT.middleWalkRatio) return 1;
+  if (magnitude < CAPTAIN_FALCON_MOVEMENT.fastWalkRatio) return 2;
   return 3;
 }
 
-function accelerationForMagnitude(magnitude: number): number {
+function accelerationForMagnitude(magnitude: number, walking = false): number {
+  if (walking) {
+    return Number(CAPTAIN_FALCON_MOVEMENT.walkAccelerationBase)
+      + Number(CAPTAIN_FALCON_MOVEMENT.walkAccelerationScale) * magnitude;
+  }
   const acceleration =
     Number(CAPTAIN_FALCON_MOVEMENT.baseAcceleration)
     + Number(CAPTAIN_FALCON_MOVEMENT.additionalAcceleration) * magnitude;
@@ -563,9 +599,17 @@ export function stepTrainingMovement(
   const direction = Math.sign(horizontal) as -1 | 0 | 1;
 
   if (direction === 0 || magnitude < 0.01) {
+    const brake = state.isGrounded
+      ? Number(CAPTAIN_FALCON_MOVEMENT.groundBrake)
+      : state.jumpsUsed > 1
+        ? Number(CAPTAIN_FALCON_MOVEMENT.airBrakeX)
+        : Number(CAPTAIN_FALCON_MOVEMENT.airGroundSpeedBrake);
+    const velocityX = moveToward(Number(state.velocityX), 0, brake);
+    const moved = advancePosition(state.positionX, velocityX);
     return advanceVerticalMovement({
       ...state,
-      velocityX: unitsPerFrame(0),
+      ...moved,
+      velocityX: moved.velocityX,
       mode: 'idle',
       inputDirection: 0,
       framesInDirection: 0,
@@ -585,14 +629,15 @@ export function stepTrainingMovement(
     && state.inputDirection !== 0
     && Math.abs(Number(state.velocityX)) > 0;
 
-  if (directionChanged && quickInput) {
+  if (state.isGrounded && directionChanged && quickInput) {
     return advanceVerticalMovement(
       startDash(state, direction, turnaround, input, framesInDirection),
       input,
     );
   }
 
-  const dashMode = state.mode === 'initial-dash' || state.mode === 'turnaround-dash';
+  const dashMode = state.isGrounded
+    && (state.mode === 'initial-dash' || state.mode === 'turnaround-dash');
   if (
     dashMode
     && direction === state.inputDirection
@@ -631,13 +676,24 @@ export function stepTrainingMovement(
   }
 
   const walking = magnitude < FULL_TILT_THRESHOLD;
+  const walkBand = walking ? walkBandForMagnitude(magnitude) : 0;
   const targetSpeed = walking
-    ? Number(CAPTAIN_FALCON_MOVEMENT.walkSpeed) * magnitude
+    ? Number(CAPTAIN_FALCON_MOVEMENT.walkSpeed)
+      * (walkBand === 1
+        ? CAPTAIN_FALCON_MOVEMENT.slowWalkSpeedMultiplier
+        : magnitude)
     : Number(CAPTAIN_FALCON_MOVEMENT.runSpeed);
+  const acceleration = state.isGrounded
+    ? accelerationForMagnitude(magnitude, walking)
+    : Number(CAPTAIN_FALCON_MOVEMENT.airAccelerationXBase)
+      + Number(CAPTAIN_FALCON_MOVEMENT.airAccelerationXScale) * magnitude;
+  const targetHorizontalSpeed = state.isGrounded
+    ? targetSpeed
+    : Number(CAPTAIN_FALCON_MOVEMENT.airSpeedXStable) * magnitude;
   const velocityX = moveToward(
     Number(state.velocityX),
-    direction * targetSpeed,
-    accelerationForMagnitude(magnitude),
+    direction * targetHorizontalSpeed,
+    acceleration,
   );
   const moved = advancePosition(state.positionX, velocityX);
 
@@ -650,7 +706,7 @@ export function stepTrainingMovement(
     inputDirection: direction,
     framesInDirection,
     framesInPhase: 0,
-    walkBand: walking ? walkBandForMagnitude(magnitude) : 0,
+    walkBand,
     stickJumpAction: input.stickJumpAction,
   }, input, state.positionX);
 }

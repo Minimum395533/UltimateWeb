@@ -614,6 +614,12 @@ test('crossing any edge of the blastzone respawns the fighter on the platform', 
 
 test('Captain Falcon movement values match the supplied Ultimate stats', () => {
   assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.walkSpeed), 0.987);
+  assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.walkAccelerationBase), 0.105);
+  assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.walkAccelerationScale), 0.158);
+  assert.equal(CAPTAIN_FALCON_MOVEMENT.slowWalkSpeedMultiplier, 0.2);
+  assert.equal(CAPTAIN_FALCON_MOVEMENT.middleWalkRatio, 0.5);
+  assert.equal(CAPTAIN_FALCON_MOVEMENT.fastWalkRatio, 0.75);
+  assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.groundBrake), 0.105);
   assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.runSpeed), 2.552);
   assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.initialDashSpeed), 1.98);
   assert.equal(CAPTAIN_FALCON_MOVEMENT.dashFrames, 15);
@@ -621,6 +627,94 @@ test('Captain Falcon movement values match the supplied Ultimate stats', () => {
   assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.baseAcceleration), 0.11);
   assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.additionalAcceleration), 0.066);
   assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.maxAcceleration), 0.176);
+});
+
+test('Falcon walk bands and acceleration use the decoded walk parameters', () => {
+  const slow = stepTrainingMovement(
+    createInitialTrainingMovementState(),
+    analog(0.4),
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  const middle = stepTrainingMovement(
+    createInitialTrainingMovementState(),
+    analog(0.5),
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  const fast = stepTrainingMovement(
+    createInitialTrainingMovementState(),
+    analog(0.75),
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+
+  assert.equal(slow.walkBand, 1);
+  assert.ok(Math.abs(Number(slow.velocityX) - 0.1682) < 1e-9);
+  assert.equal(middle.walkBand, 2);
+  assert.equal(fast.walkBand, 3);
+});
+
+test('ground and air horizontal movement use their separate braking and air-control values', () => {
+  const grounded = stepTrainingMovement(
+    {
+      ...createInitialTrainingMovementState(),
+      velocityX: unitsPerFrame(0.2),
+    },
+    analog(0),
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.ok(Math.abs(Number(grounded.velocityX) - 0.095) < 1e-12);
+
+  let airborne = {
+    ...createInitialTrainingMovementState(),
+    positionY: worldUnits(100),
+    velocityX: unitsPerFrame(0),
+    isGrounded: false,
+    jumpsUsed: 1,
+  };
+  airborne = stepTrainingMovement(airborne, analog(1), DEFAULT_CONTROLLER_SETTINGS);
+  assert.equal(Number(airborne.velocityX), 0.075);
+  for (let frame = 0; frame < 20; frame += 1) {
+    airborne = stepTrainingMovement(airborne, analog(1), DEFAULT_CONTROLLER_SETTINGS);
+  }
+  assert.equal(Number(airborne.velocityX), 1.218);
+
+  airborne = stepTrainingMovement(
+    { ...airborne, velocityX: unitsPerFrame(1) },
+    analog(0),
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.equal(Number(airborne.velocityX), 0.9775);
+  airborne = stepTrainingMovement(
+    { ...airborne, velocityX: unitsPerFrame(1), jumpsUsed: 2 },
+    analog(0),
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+  assert.ok(Math.abs(Number(airborne.velocityX) - 0.9925) < 1e-12);
+
+  assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.airSpeedXStable), 1.218);
+  assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.airBrakeX), 0.0075);
+  assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.airGroundSpeedBrake), 0.0225);
+  assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.airAccelerationXScale), 0.065);
+  assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.airAccelerationXBase), 0.01);
+});
+
+test('jump horizontal speed preserves scaled momentum and respects Falcon’s cap', () => {
+  const launchState = {
+    ...createInitialTrainingMovementState(),
+    velocityX: unitsPerFrame(0.5),
+    jumpSquatFramesRemaining: 1,
+    jumpInputHeld: true,
+  };
+  const launched = stepTrainingMovement(
+    launchState,
+    analog(0.5, false, false, true),
+    DEFAULT_CONTROLLER_SETTINGS,
+  );
+
+  assert.ok(Math.abs(Number(launched.velocityX) - 0.820125) < 1e-9);
+  assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.jumpSpeedX), 0.9);
+  assert.equal(CAPTAIN_FALCON_MOVEMENT.jumpSpeedXMultiplier, 0.75);
+  assert.equal(Number(CAPTAIN_FALCON_MOVEMENT.jumpSpeedXMax), 2.1);
+  assert.equal(CAPTAIN_FALCON_MOVEMENT.airJumpSpeedXMultiplier, 0.9);
 });
 
 test('Captain Falcon jump data matches the supplied Ultimate heights', () => {
