@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useGameState } from '../hooks/useGameState';
 import { characters, getColorByIndex } from '../data/characters';
+import { APPROVED_ANIMATIONS } from '../data/falcon/approvedAnimations';
+import { ANIMATION_CATALOG } from '../data/falcon/animationCatalog';
 import { resolveAnimationClip } from '../data/falcon/trainingClips';
 import type { AnimationClip } from '../dev/animationPreview';
 import { readTrainingControlInput } from '../physics/trainingInput';
@@ -310,6 +312,9 @@ const MatchScreen: React.FC = () => {
   const isCountdown = displayRules.phase === 'countdown';
   const visibleTimer = formatMatchTime(displayRules.framesRemaining);
   const showResults = completed || displayRules.phase === 'finished';
+  const hasUnapprovedHitboxGeometry = ANIMATION_CATALOG.some((entry) =>
+    Boolean(entry.hitboxes?.length) && !APPROVED_ANIMATIONS[entry.id]?.frames.length,
+  );
   const leftColor = getColorByIndex(characters[0], fighters[0]?.profile.colorIndex)?.primaryColor ?? '#16c6e7';
   const rightColor = getColorByIndex(characters[0], fighters[1]?.profile.colorIndex)?.primaryColor ?? '#ffbd3e';
   const availablePads = typeof navigator === 'undefined' ? 0 : Array.from(navigator.getGamepads?.() ?? []).filter(Boolean).length;
@@ -338,6 +343,10 @@ const MatchScreen: React.FC = () => {
         ))}
       </header>
       <div className="match-stage-wrap">
+        {hasUnapprovedHitboxGeometry && <div className="match-geometry-notice" role="status">
+          <strong>Provisional hitbox shapes</strong>
+          <span>Damage/frame data: SmashWiki · positions: estimated</span>
+        </div>}
         <svg className="match-stage" viewBox={`${camera.x - viewWidth / 2} -75 ${viewWidth} 100`} role="img" aria-label="Omega platform local match">
           <defs>
             <linearGradient id="match-platform" x1="0" x2="0" y1="0" y2="1"><stop stopColor="#354763" /><stop offset="1" stopColor="#101a2b" /></linearGradient>
