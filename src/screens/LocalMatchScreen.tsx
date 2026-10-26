@@ -21,6 +21,9 @@ import { collisionCanDealDamage, defaultTrainingHurtboxes, resolveHitboxCollisio
 import type { CollisionHistory, CombatantFrame } from '../physics/hitboxCollision';
 import { classifyNormalAttack } from '../physics/normalAttacks';
 import { normalizeControllerSettings } from '../physics/controllerSettings';
+import { advanceLocalMatchLedge } from '../physics/localMatchLedge';
+import { createLedgeRecoveryState, ledgeOptionIntangible } from '../physics/ledgeRecovery';
+import type { LedgeRecoveryState } from '../physics/ledgeRecovery';
 import {
   advanceLocalMatchRules, countdownLabel, createLocalMatchRules, formatMatchTime,
   loseLocalMatchStock, resolveLocalMatchTimeout,
@@ -40,7 +43,8 @@ interface Fighter {
   staleQueue: string[];
   attack: { id: string; frameIndex: number; clip: AnimationClip } | null;
   runtime: CombatantRuntime;
-  previous: { attack: boolean; tilt: boolean; smash: boolean; special: boolean };
+  ledge: LedgeRecoveryState;
+  previous: { attack: boolean; tilt: boolean; smash: boolean; special: boolean; jump: boolean };
   respawnFrames: number;
   invulnerableFrames: number;
 }
@@ -52,7 +56,8 @@ const makeFighter = (profile: PlayerProfile, index: number, stocks: number): Fig
     profile, movement, percent: 0, stocks, damageDealt: 0, kos: 0, falls: 0, staleQueue: [],
     attack: null,
     runtime: { percent: 0, positionX: Number(movement.positionX), positionY: 0, velocityX: 0, velocityY: 0, hitlagFrames: 0, hitstunFrames: 0, ko: false },
-    previous: { attack: false, tilt: false, smash: false, special: false }, respawnFrames: 0, invulnerableFrames: 0,
+    ledge: createLedgeRecoveryState(),
+    previous: { attack: false, tilt: false, smash: false, special: false, jump: false }, respawnFrames: 0, invulnerableFrames: 0,
   };
 };
 const PLAYER_TWO_KEYBOARD_ACTIONS: Readonly<Record<string, string>> = {
@@ -160,29 +165,37 @@ const MatchScreen: React.FC = () => {
               if (fighter.respawnFrames === 0) {
                 fighter.movement = { ...createInitialTrainingMovementState(), positionX: (i === 0 ? -12 : 12) as TrainingMovementState['positionX'], facingDirection: i === 0 ? 1 : -1 };
                 fighter.runtime = { percent: 0, positionX: Number(fighter.movement.positionX), positionY: 0, velocityX: 0, velocityY: 0, hitlagFrames: 0, hitstunFrames: 0, ko: false };
+                fighter.ledge = createLedgeRecoveryState();
+                fighter.attack = null;
                 fighter.percent = 0;
                 fighter.invulnerableFrames = 90;
               }
               continue;
             }
             fighter.invulnerableFrames = Math.max(0, fighter.invulnerableFrames - 1);
-            const attackId = classifyNormalAttack({
-              attackPressed: input.actions.attack && !fighter.previous.attack,
+            const attackPressed = input.actions.attack && !fighter.previous.attack;
+            const jumpPressed = input.jumpPressed || (input.actions.jump && !fighter.previous.jump);
+            const attackId = fighter.ledge.side === null ? classifyNormalAttack({
+              attackPressed,
               tiltPressed: input.actions.tilt && !fighter.previous.tilt,
               smashPressed: input.actions.smash && !fighter.previous.smash,
               horizontal: input.horizontal * fighter.movement.facingDirection, vertical: input.vertical,
               rightX: input.rightStickX * fighter.movement.facingDirection, rightY: input.rightStickY,
               airborne: !fighter.movement.isGrounded,
-              dashAttack: input.actions.attack && !fighter.previous.attack && fighter.movement.mode === 'run',
+              dashAttack: attackPressed && fighter.movement.mode === 'run',
               stickMode: fighter.profile.controllerSettings?.rightStickMode ?? 'smash', flick: false,
-            });
+            }) : null;
             const specialPressed = input.actions.special && !fighter.previous.special;
-            fighter.previous = { attack: input.actions.attack, tilt: input.actions.tilt, smash: input.actions.smash, special: input.actions.special };
+            fighter.previous = {
+              attack: input.actions.attack, tilt: input.actions.tilt,
+              smash: input.actions.smash, special: input.actions.special,
+              jump: input.actions.jump,
+            };
             if (attackId && !fighter.attack) {
               const clip = resolveAnimationClip(attackId);
               if (clip) fighter.attack = { id: attackId, frameIndex: -1, clip };
             }
-            if (specialPressed && !fighter.attack) {
+            if (specialPressed && !fighter.attack && fighter.ledge.side === null) {
               const move = input.vertical > 0.65 ? 'falcon-dive'
                 : input.vertical < -0.65 ? 'falcon-kick'
                   : Math.abs(input.horizontal) > 0.65 ? 'raptor-boost' : 'falcon-punch';
@@ -202,26 +215,60 @@ const MatchScreen: React.FC = () => {
             }
             const oldX = Number(fighter.movement.positionX);
             const oldY = Number(fighter.movement.positionY);
-            if (fighter.runtime.hitlagFrames > 0) {
-              fighter.runtime = { ...fighter.runtime, hitlagFrames: fighter.runtime.hitlagFrames - 1 };
-            } else if (fighter.runtime.hitstunFrames > 0) {
-              fighter.runtime = stepLaunch(fighter.runtime, {
-                left: Number(TRAINING_BLASTZONE_BOUNDS.left), right: Number(TRAINING_BLASTZONE_BOUNDS.right),
-                bottom: Number(TRAINING_BLASTZONE_BOUNDS.bottom), top: Number(TRAINING_BLASTZONE_BOUNDS.top),
-              });
-              if (!fighter.runtime.ko && fighter.runtime.positionY <= 0 && fighter.runtime.velocityY < 0) {
-                fighter.runtime = { ...fighter.runtime, positionY: 0, velocityY: 0, hitstunFrames: Math.max(0, fighter.runtime.hitstunFrames - 1) };
+            if (fighter.ledge.side !== null) {
+              const ledgeStep = advanceLocalMatchLedge(fighter.ledge, fighter.movement, {
+                jumpPressed, attackPressed, shieldHeld: input.actions.shield,
+                vertical: input.vertical, horizontal: input.horizontal,
+              }, fighter.percent);
+              fighter.ledge = ledgeStep.state;
+              fighter.movement = ledgeStep.movement;
+              if (ledgeStep.animationId) {
+                const clip = resolveAnimationClip(ledgeStep.animationId);
+                if (clip) fighter.attack = { id: ledgeStep.animationId, frameIndex: -1, clip };
               }
-              fighter.movement = {
-                ...fighter.movement, positionX: fighter.runtime.positionX as TrainingMovementState['positionX'],
-                positionY: fighter.runtime.positionY as TrainingMovementState['positionY'],
-                velocityX: fighter.runtime.velocityX as TrainingMovementState['velocityX'],
-                velocityY: fighter.runtime.velocityY as TrainingMovementState['velocityY'],
-                isGrounded: fighter.runtime.positionY === 0 && fighter.runtime.velocityY === 0,
+              if (ledgeStep.completedOption) fighter.attack = null;
+              fighter.runtime = {
+                ...fighter.runtime,
+                positionX: Number(fighter.movement.positionX), positionY: Number(fighter.movement.positionY),
+                velocityX: Number(fighter.movement.velocityX), velocityY: Number(fighter.movement.velocityY),
               };
             } else {
-              fighter.movement = stepTrainingMovement(fighter.movement, input, normalizeControllerSettings(fighter.profile.controllerSettings));
-              fighter.runtime = { ...fighter.runtime, positionX: Number(fighter.movement.positionX), positionY: Number(fighter.movement.positionY), velocityX: Number(fighter.movement.velocityX), velocityY: Number(fighter.movement.velocityY) };
+              if (fighter.runtime.hitlagFrames > 0) {
+                fighter.runtime = { ...fighter.runtime, hitlagFrames: fighter.runtime.hitlagFrames - 1 };
+              } else if (fighter.runtime.hitstunFrames > 0) {
+                fighter.runtime = stepLaunch(fighter.runtime, {
+                  left: Number(TRAINING_BLASTZONE_BOUNDS.left), right: Number(TRAINING_BLASTZONE_BOUNDS.right),
+                  bottom: Number(TRAINING_BLASTZONE_BOUNDS.bottom), top: Number(TRAINING_BLASTZONE_BOUNDS.top),
+                });
+                if (!fighter.runtime.ko && fighter.runtime.positionY <= 0 && fighter.runtime.velocityY < 0) {
+                  fighter.runtime = { ...fighter.runtime, positionY: 0, velocityY: 0, hitstunFrames: Math.max(0, fighter.runtime.hitstunFrames - 1) };
+                }
+                fighter.movement = {
+                  ...fighter.movement, positionX: fighter.runtime.positionX as TrainingMovementState['positionX'],
+                  positionY: fighter.runtime.positionY as TrainingMovementState['positionY'],
+                  velocityX: fighter.runtime.velocityX as TrainingMovementState['velocityX'],
+                  velocityY: fighter.runtime.velocityY as TrainingMovementState['velocityY'],
+                  isGrounded: fighter.runtime.positionY === 0 && fighter.runtime.velocityY === 0,
+                };
+              } else {
+                fighter.movement = stepTrainingMovement(fighter.movement, input, normalizeControllerSettings(fighter.profile.controllerSettings));
+              }
+              const ledgeStep = advanceLocalMatchLedge(fighter.ledge, fighter.movement, {
+                jumpPressed, attackPressed, shieldHeld: input.actions.shield,
+                vertical: input.vertical, horizontal: input.horizontal,
+              }, fighter.percent);
+              fighter.ledge = ledgeStep.state;
+              fighter.movement = ledgeStep.movement;
+              if (ledgeStep.animationId) {
+                const clip = resolveAnimationClip(ledgeStep.animationId);
+                if (clip) fighter.attack = { id: ledgeStep.animationId, frameIndex: -1, clip };
+              }
+              if (ledgeStep.completedOption) fighter.attack = null;
+              fighter.runtime = {
+                ...fighter.runtime,
+                positionX: Number(fighter.movement.positionX), positionY: Number(fighter.movement.positionY),
+                velocityX: Number(fighter.movement.velocityX), velocityY: Number(fighter.movement.velocityY),
+              };
             }
             if (fighter.movement.positionX === 0 && fighter.movement.positionY === 0 && (Math.abs(oldX) > 180 || oldY < -100)) fighter.runtime = { ...fighter.runtime, ko: true };
             if (fighter.runtime.ko) {
@@ -251,7 +298,11 @@ const MatchScreen: React.FC = () => {
             const targetIndex = Number(hit.targetId.slice(1));
             const attacker = fightersRef.current[attackerIndex];
             const target = fightersRef.current[targetIndex];
-            if (target.invulnerableFrames > 0 || !collisionCanDealDamage(hit)) continue;
+            if (
+              target.invulnerableFrames > 0
+              || ledgeOptionIntangible(target.ledge)
+              || !collisionCanDealDamage(hit)
+            ) continue;
             const ratio = Math.max(0.1, Math.min(3, settings.damageRatio ?? 1));
             const reaction = calculateHitReaction({ ...hit.hitbox, damage: hit.hitbox.damage * ratio }, {
               percent: target.percent, weight: CAPTAIN_FALCON_WEIGHT, staleQueue: target.staleQueue,
@@ -364,6 +415,11 @@ const MatchScreen: React.FC = () => {
               <path d="M -2 -19 L 0 -22 L 3 -19 L 1 -18 Z" fill="#e83f4e" />
               <path d="M -2 -2 L -3 0 M 2 -2 L 3 0" stroke="#f2c6a1" strokeWidth="1.2" />
               <text x="0" y="-25" textAnchor="middle" fontSize="3" fill="white" stroke="#0c1420" strokeWidth=".7" paintOrder="stroke">{fighter.profile.name}</text>
+              {fighter.attack && <g className="match-action-cue" transform={`scale(${fighter.movement.facingDirection} 1)`}>
+                <path d="M 2 -9 Q 11 -16 7 -22" fill="none" stroke="#ffe36e" strokeWidth="1.6" strokeLinecap="round" />
+                <text x="5" y="-27" textAnchor="middle" fontSize="2.6" fill="#ffe36e" stroke="#0c1420" strokeWidth=".65" paintOrder="stroke">{fighter.attack.id.replaceAll('-', ' ')}</text>
+              </g>}
+              {fighter.ledge.side !== null && <text x="0" y="-29" textAnchor="middle" fontSize="2.6" fill="#7cebd7" stroke="#0c1420" strokeWidth=".65" paintOrder="stroke">LEDGE</text>}
             </g>;
           })}
         </svg>

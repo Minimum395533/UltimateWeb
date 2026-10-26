@@ -6,6 +6,9 @@ import {
   ledgeHangLimit, ledgeOptionFrameCount, ledgeOptionIntangible, snapLedgePosition,
   stepLedge, trumpLedge,
 } from '../../src/physics/ledgeRecovery.ts';
+import { advanceLocalMatchLedge } from '../../src/physics/localMatchLedge.ts';
+import { createInitialTrainingMovementState } from '../../src/physics/trainingMovement.ts';
+import { unitsPerFrame, worldUnits } from '../../src/physics/units.ts';
 
 test('ledge snap detects both platform edges only while descending beside the ledge', () => {
   assert.equal(detectLedgeGrab(82, -4, -1, true), 1);
@@ -13,6 +16,69 @@ test('ledge snap detects both platform edges only while descending beside the le
   assert.equal(detectLedgeGrab(80, -4, 1, true), null);
   assert.equal(detectLedgeGrab(80, -4, -1, false), null);
   assert.equal(Number(snapLedgePosition(-1)), -80);
+});
+
+test('local-match movement grabs, snaps, hangs, and starts a ledge attack', () => {
+  const fallingMovement = {
+    ...createInitialTrainingMovementState(),
+    positionX: worldUnits(82),
+    positionY: worldUnits(-4),
+    velocityY: unitsPerFrame(-1),
+    isGrounded: false,
+  };
+  let result = advanceLocalMatchLedge(
+    createLedgeRecoveryState(),
+    fallingMovement,
+    { jumpPressed: false, attackPressed: false, shieldHeld: false, vertical: 0, horizontal: 0 },
+    0,
+  );
+  assert.equal(result.grabbed, true);
+  assert.equal(result.state.side, 1);
+  assert.equal(Number(result.movement.positionX), 80);
+  assert.equal(result.animationId, 'ledge-catch');
+
+  for (let frame = 0; frame < 19; frame += 1) {
+    result = advanceLocalMatchLedge(
+      result.state,
+      result.movement,
+      { jumpPressed: false, attackPressed: false, shieldHeld: false, vertical: 0, horizontal: 0 },
+      0,
+    );
+  }
+  result = advanceLocalMatchLedge(
+    result.state,
+    result.movement,
+    { jumpPressed: false, attackPressed: true, shieldHeld: false, vertical: 0, horizontal: 0 },
+    0,
+  );
+  assert.equal(result.state.option, 'attack');
+  assert.equal(result.animationId, 'ledge-attack');
+});
+
+test('local-match ledge jump releases with an aerial jump available', () => {
+  let state = { ...grabLedge(createLedgeRecoveryState(), -1, 40, 10), hangFrames: 19 };
+  let movement = {
+    ...createInitialTrainingMovementState(),
+    positionX: worldUnits(-80),
+    isGrounded: false,
+  };
+  let result = advanceLocalMatchLedge(
+    state, movement,
+    { jumpPressed: true, attackPressed: false, shieldHeld: false, vertical: 0, horizontal: 0 },
+    10,
+  );
+  assert.equal(result.state.option, 'jump');
+  for (let frame = 0; frame < 30 && result.state.side !== null; frame += 1) {
+    result = advanceLocalMatchLedge(
+      result.state, result.movement,
+      { jumpPressed: false, attackPressed: false, shieldHeld: false, vertical: 0, horizontal: 0 },
+      10,
+    );
+  }
+  assert.equal(result.state.side, null);
+  assert.equal(result.completedOption, 'jump');
+  assert.equal(result.movement.isGrounded, false);
+  assert.equal(result.movement.jumpsUsed, 1);
 });
 
 test('Ultimate ledge intangibility follows airtime and percent, and regrabs lose it', () => {
